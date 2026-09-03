@@ -1,0 +1,7 @@
+@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+@chainlink/contracts/=lib/foundry-chainlink-toolkit/src/interfaces/feeds/
+@Oracles/=src/oracles/
+@INGNS/=src/interfaces/
+@INGNOracle/=src/interfaces/
+@NGNS/=src/
