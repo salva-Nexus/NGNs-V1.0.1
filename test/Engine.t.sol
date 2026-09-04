@@ -59,12 +59,13 @@ contract Engine is BaseTest {
         engine.depositCollateral(address(mockWETH), uint128(depositAmount));
         NGNSEngine.PositionConfig memory position = engine.positions(OWNER, address(mockWETH));
         console.log("WETH DEPOSIT AMOUNT TO NAIRA VALUE: ", position.collateralDeposited);
-        (, int256 price,,,) = engine.priceFeed(address(mockAggregatorV3ForWeth));
-        console.log(10, " WETH = ", position.collateralDeposited / 10 ** ngns.decimals(), "NGNS");
-        assertEq(
-            position.collateralDeposited,
-            engine.getNgnValue(address(mockWETH), address(mockAggregatorV3ForWeth), depositAmount)
+        console.log(
+            position.collateralDeposited / 10 ** mockWETH.decimals(),
+            ": ",
+            engine.getNgnValue(address(mockWETH), address(mockAggregatorV3ForWeth), depositAmount),
+            "NGNS"
         );
+        assertEq(position.collateralDeposited, depositAmount);
         assertEq(position.mintedNgns, 0);
 
         _test_Cannot_Deposit_Unregistered_Collateral(depositAmount);

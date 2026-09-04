@@ -25,10 +25,8 @@ contract NGNSEngine is CollateralOracle, Events {
     }
 
     function depositCollateral(address token, uint128 collateralAmount) external {
-        CollateralConfig memory config = collateralConfig(msg.sender, token);
         _checkDepositReq(token, uint256(collateralAmount));
-        uint256 ngnValue = getNgnValue(token, config.priceFeed, uint256(collateralAmount));
-        _storeCollateralPosition(token, uint128(ngnValue), 1);
+        _storeCollateralPosition(token, uint128(collateralAmount), 1);
         IERC20(token).safeTransferFrom(msg.sender, address(this), collateralAmount);
         emit CollateralDeposited(msg.sender, token, collateralAmount);
     }
