@@ -13,7 +13,7 @@ contract NGNSEngine is CollateralOracle, Events {
 
     constructor(address ngnsTokenAddress, address priceFeedAddress) {
         ngns = ngnsTokenAddress;
-        ngnPriceFeed = priceFeedAddress;
+        ngnPriceFeed = priceFeedAddress;//
     }
 
     /// @notice Permissionless Collateral Registration via Chainlink Feed Check
