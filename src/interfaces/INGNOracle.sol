@@ -8,5 +8,6 @@ interface INGNOracle {
         uint256 pricePerUsd;
         uint256 updatedAt;
     }
-    function getNgnPricePerUsd() external view returns (PriceConfig memory, uint8);
+    function decimals() external view returns (uint8);
+    function getUsdPricePerNgn() external view returns (uint256 usdPricePerNgn, uint256 updatedAt);
 }

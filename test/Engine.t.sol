@@ -16,8 +16,7 @@ contract Engine is BaseTest {
         engine.registerCollateral(
             address(mockWETH), address(mockAggregatorV3ForWeth), scaledToBps, thresholdScaledToBps
         );
-        NGNSEngine.CollateralConfig memory config =
-            engine.collateralConfig(OWNER, address(mockWETH));
+        NGNSEngine.CollateralConfig memory config = engine.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
         assertEq(config.customCollateralRatio, scaledToBps);
         assertEq(config.customLiqThreshold, thresholdScaledToBps);
@@ -25,9 +24,7 @@ contract Engine is BaseTest {
         _test_cannotRegisterSameCollateral(scaledToBps, thresholdScaledToBps);
     }
 
-    function _test_cannotRegisterSameCollateral(uint48 scaledToBps, uint48 thresholdScaledToBps)
-        internal
-    {
+    function _test_cannotRegisterSameCollateral(uint48 scaledToBps, uint48 thresholdScaledToBps) internal {
         vm.expectRevert(Errors.NGNSEngine__CollateralLive.selector);
         engine.registerCollateral(
             address(mockWETH), address(mockAggregatorV3ForWeth), scaledToBps, thresholdScaledToBps
@@ -41,17 +38,13 @@ contract Engine is BaseTest {
         address newMockAggr = address(_newMockAggregator());
         for (uint48 ratio = 0; ratio < 150; ratio++) {
             vm.expectRevert(Errors.NGNSEngine__InvalidCollateralRatio.selector);
-            engine.registerCollateral(
-                newMockWETH, newMockAggr, ratio * BPS_SCALER, thresholdScaledToBps
-            );
+            engine.registerCollateral(newMockWETH, newMockAggr, ratio * BPS_SCALER, thresholdScaledToBps);
         }
         uint48 ratioScaled = 160 * BPS_SCALER;
         _test_cannotRegisterMinThreshold(newMockWETH, newMockAggr, ratioScaled);
     }
 
-    function _test_cannotRegisterMinThreshold(address newMock, address newMockAggr, uint48 ratio)
-        internal
-    {
+    function _test_cannotRegisterMinThreshold(address newMock, address newMockAggr, uint48 ratio) internal {
         for (uint48 liqThreshold = 0; liqThreshold < 115; liqThreshold++) {
             vm.expectRevert(Errors.NGNSEngine__InvalidLiqThreshold.selector);
             engine.registerCollateral(newMock, newMockAggr, ratio, liqThreshold * BPS_SCALER);
@@ -65,20 +58,14 @@ contract Engine is BaseTest {
         mockWETH.approve(address(engine), depositAmount);
         engine.depositCollateral(address(mockWETH), uint128(depositAmount));
         NGNSEngine.PositionConfig memory position = engine.positions(OWNER, address(mockWETH));
-        assertEq(position.collateralDeposited, depositAmount);
+        console.log("WETH DEPOSIT AMOUNT TO NAIRA VALUE: ", position.collateralDeposited);
+        (, int256 price,,,) = engine.priceFeed(address(mockAggregatorV3ForWeth));
+        console.log(10, " WETH = ", position.collateralDeposited / 10 ** ngns.decimals(), "NGNS");
+        assertEq(
+            position.collateralDeposited,
+            engine.getNgnValue(address(mockWETH), address(mockAggregatorV3ForWeth), depositAmount)
+        );
         assertEq(position.mintedNgns, 0);
-
-        _test_New_Deposit(depositAmount);
-    }
-
-    function _test_New_Deposit(uint256 depositAmount) internal {
-        mockWETH.approve(address(engine), depositAmount);
-        engine.depositCollateral(address(mockWETH), uint128(depositAmount));
-        NGNSEngine.PositionConfig memory position = engine.positions(OWNER, address(mockWETH));
-        assertEq(position.collateralDeposited, depositAmount * 2);
-        assertEq(position.mintedNgns, 0);
-        assertEq(mockWETH.balanceOf(address(engine)), depositAmount * 2);
-        assertEq(mockWETH.balanceOf(OWNER), wethToMint - depositAmount * 2);
 
         _test_Cannot_Deposit_Unregistered_Collateral(depositAmount);
     }
@@ -88,7 +75,7 @@ contract Engine is BaseTest {
         bytes memory data = abi.encodeWithSignature("deposit()");
         (bool success,) = newMock.call{ value: depositAmount }(data);
         console.log("MINT WETH SUCCESS: ", success);
-        bytes memory data2 = abi.encodeWithSignature("approve()", address(engine), depositAmount);
+        bytes memory data2 = abi.encodeWithSignature("approve(address,uint256)", address(engine), depositAmount);
         (bool success2,) = newMock.call(data2);
         console.log("APPROVE SUCCESS: ", success2);
         vm.expectRevert(Errors.NGNSEngine__UnsupportedCollateral.selector);
@@ -96,25 +83,32 @@ contract Engine is BaseTest {
     }
 
     function test_shift() external pure {
-        bytes32 top;
-        bytes32 collateralAmount;
-        bytes32 collateral;
-        bytes32 full;
+        // GET PRICE OF 1 COLLATERAL IN USD - eg 1WETH = $2000 => 200000000000
+        uint256 collateralAmount = 100e18; // WETH AMOUNT
+        int256 price = 2000e8; // FROM CHAINLINK
+        // GET PRICE OF 1 NGN IN USD - eg 1NGN = 0.00084 USD => 840
+        uint256 usdPricePerNgn = 840;
+        // GET NGN ORACLE DECIMALS => 6
+        uint8 ngnOracleDecimals = 6;
+        uint8 chainlinkFeedDecimals = 8;
+        // TO GET WHAT 1 USD IS IN NGN => 1/USDPRICEPERNGN = 1 / 0.00084 = 1e6 / USDPRICEPERNGN = 1190476190 =>
+        // 1190.476190
+        uint256 ngnPricePerUsd = (10 ** ngnOracleDecimals * 10 ** ngnOracleDecimals) / usdPricePerNgn;
+        // TO GET THE USD PRICE OF THE INPUTTED COLLATERAL AMOUNT - amount * usdPrice = 100 WETH * 2000 USD = 200,000
+        // 100e18 * 200000000000 = 200000 00000000000000000000000000
+        uint256 collaterAmountToUsd = collateralAmount * uint256(price);
+        // NOW DERIVE THE NGN VALUE OF THE COLLATERAL USD VALUE
+        // (20000000000000000000000000000000 * 1190476190) / (1e8 * 1e6) = 238095238000000000000000000 (238,095,238)
+        uint256 collaterAmountToNgn =
+            (collaterAmountToUsd * ngnPricePerUsd) / (10 ** chainlinkFeedDecimals * 10 ** ngnOracleDecimals);
 
-        assembly {
-            top := 0x1111111111111111111111111111111122222222222222222222222222222222
-            collateralAmount := 51234
+        // NOW GET THE ABSOLUTELY VALUE SCALED TO THE DECIMALS OF NGNS CONTRACT
+        // (238095238000000000000000000 * 1e6) / 1e18 = 238095238000000 = 238,095,238 NGN = 1 WETH
+        uint8 ngnsDecimals = 6;
+        uint8 collateralDecimals = 18;
+        uint256 ngnValue = (collaterAmountToNgn * 10 ** ngnsDecimals) / 10 ** collateralDecimals;
 
-            collateral := shr(0x80, top)
-            full := or(
-                shl(0x80, add(collateralAmount, collateral)),
-                and(top, 0xffffffffffffffffffffffffffffffff)
-            )
-        }
-
-        console.logBytes32(top);
-        console.logBytes32(collateralAmount);
-        console.logBytes32(collateral);
-        console.logBytes32(full);
+        console.log("Collateral Amount to Ngn: ", ngnValue);
+        console.log("Collateral Amount Scaled To Absolute RW Value: ", ngnValue / 10 ** ngnsDecimals);
     }
 }

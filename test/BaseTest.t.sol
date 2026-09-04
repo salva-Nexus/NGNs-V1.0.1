@@ -19,7 +19,7 @@ abstract contract BaseTest is Test {
     NGNOracle internal ngnOracle;
     MockWETH internal mockWETH;
     MockAggregatorV3 internal mockAggregatorV3ForWeth;
-    uint256 internal ngnPricePerUsd = 840; // 0.00084 USD per 1 NGN
+    uint256 internal usdPricePerNgn = 840; // 0.00084 USD per 1 NGN
     uint256 internal wethToUsdPrice = 2000e8; // 2000 USD per 1 WETH
     uint256 internal ethToDeal = 100 * 10 ** 18;
     uint256 internal wethToMint = 50 * 10 ** 18;
@@ -32,33 +32,24 @@ abstract contract BaseTest is Test {
         _changePrank(OWNER);
         ngns = new NGNS();
         console.log(unicode"NGNS ✅                        =>                  ", address(ngns));
-        ngnOracle = new NGNOracle(ngnPricePerUsd);
-        console.log(
-            unicode"NGN Oracle ✅                  =>                  ", address(ngnOracle)
-        );
-        NGNSEngine newEngine = new NGNSEngine();
-        console.log(
-            unicode"NGN Engine Impl ✅             =>                  ", address(newEngine)
-        );
-        bytes memory engineInitData = abi.encodeWithSelector(
-            newEngine.initialize.selector, address(ngns), address(ngnOracle)
-        );
-        ERC1967Proxy engineProxy = new ERC1967Proxy(address(newEngine), engineInitData);
-        engine = NGNSEngine(address(engineProxy));
-        ngns.setEngine(address(engine));
+
+        NGNOracle oracle = new NGNOracle();
+        bytes memory oracleInitData = abi.encodeWithSelector(oracle.initialize.selector, usdPricePerNgn);
+        ERC1967Proxy oracleProxy = new ERC1967Proxy(address(oracle), oracleInitData);
+        console.log(unicode"NGN Oracle Impl ✅             =>                  ", address(oracle));
+        ngnOracle = NGNOracle(address(oracleProxy));
+        console.log(unicode"NGN Oracle ✅                  =>                  ", address(ngnOracle));
+
+        engine = new NGNSEngine(address(ngns), address(ngnOracle));
         console.log(unicode"NGN Engine ✅                  =>                  ", address(engine));
+        ngns.setEngine(address(engine));
 
         _deal(OWNER);
         mockWETH = new MockWETH();
         mockWETH.deposit{ value: wethToMint }();
         mockAggregatorV3ForWeth = new MockAggregatorV3(8, int256(wethToUsdPrice));
-        console.log(
-            unicode"WETH TOKEN ✅                  =>                  ", address(mockWETH)
-        );
-        console.log(
-            unicode"WETH PRICE FEED ✅             =>                  ",
-            address(mockAggregatorV3ForWeth)
-        );
+        console.log(unicode"WETH TOKEN ✅                  =>                  ", address(mockWETH));
+        console.log(unicode"WETH PRICE FEED ✅             =>                  ", address(mockAggregatorV3ForWeth));
 
         bool ensureSuccess = _assertions();
         if (ensureSuccess) console.log(unicode"✅ SETUP SUCCESSFUL!!", ensureSuccess);
@@ -75,8 +66,7 @@ abstract contract BaseTest is Test {
         engine.registerCollateral(
             address(mockWETH), address(mockAggregatorV3ForWeth), scaledToBps, thresholdScaledToBps
         );
-        NGNSEngine.CollateralConfig memory config =
-            engine.collateralConfig(OWNER, address(mockWETH));
+        NGNSEngine.CollateralConfig memory config = engine.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
         assertEq(config.customCollateralRatio, scaledToBps);
         assertEq(config.customLiqThreshold, thresholdScaledToBps);
@@ -86,8 +76,8 @@ abstract contract BaseTest is Test {
 
     function _assertions() internal view returns (bool) {
         (, int256 wethPrice,,,) = mockAggregatorV3ForWeth.latestRoundData();
-        return ngns.NGNS_ENGINE() == address(engine)
-            && ngnOracle.getNgnPricePerUsd().pricePerUsd == ngnPricePerUsd
+        (uint256 usdPricePerNgnFromOracle,) = ngnOracle.getUsdPricePerNgn();
+        return ngns.NGNS_ENGINE() == address(engine) && usdPricePerNgnFromOracle == usdPricePerNgn
             && uint256(wethPrice) == wethToUsdPrice && engine.UPGRADE_ROLE() != bytes32(0)
             && IERC20(mockWETH).balanceOf(OWNER) == wethToMint && OWNER.balance == wethToMint;
     }

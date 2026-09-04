@@ -9,4 +9,7 @@ abstract contract Errors {
     error NGNSEngine__CollateralLive();
     error NGNSEngine__InvalidLiqThreshold();
     error NGNSEngine__ZeroAmount();
+    error NGNSEngine__StalePrice();
+    error NGNSEngine__InvalidRound();
+    error NGNSEngine__InvalidThresholdBuffer();
 }

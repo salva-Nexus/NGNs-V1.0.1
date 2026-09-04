@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+// VALUES AND POSITIONS ARE STORED IN NGN
 abstract contract Storage {
     uint256 internal constant MIN_COLLATERAL_RATIO = 15000; // 150% in BPS
     uint256 internal constant BPS_DENOMINATOR = 10000;
     uint256 internal constant MIN_LIQ_THRESHOLD = 11500;
+    uint256 internal constant DECIMAL_SCALER = 10 ** 18;
+    uint256 internal constant STALE_PRICE_THRESHOLD = 2 hours;
     address internal ngns;
     address internal ngnPriceFeed;
 
@@ -45,9 +48,7 @@ abstract contract Storage {
         }
     }
 
-    function _storeCollateralPosition(address token, uint128 collateralAmount, uint8 action)
-        internal
-    {
+    function _storeCollateralPosition(address token, uint128 collateralAmount, uint8 action) internal {
         bytes32 slot = _positionSlot(msg.sender, token);
         if (action == 1) {
             assembly ("memory-safe") {
@@ -55,10 +56,7 @@ abstract contract Storage {
                 let packed := sload(pSlot)
                 let collateral := shr(0x80, packed)
                 let full :=
-                    or(
-                        shl(0x80, add(collateralAmount, collateral)),
-                        and(packed, 0xffffffffffffffffffffffffffffffff)
-                    )
+                    or(shl(0x80, add(collateralAmount, collateral)), and(packed, 0xffffffffffffffffffffffffffffffff))
                 sstore(pSlot, full)
             }
         } else {
@@ -67,10 +65,7 @@ abstract contract Storage {
                 let packed := sload(pSlot)
                 let collateral := shr(0x80, packed)
                 let full :=
-                    or(
-                        shl(0x80, sub(collateral, collateralAmount)),
-                        and(packed, 0xffffffffffffffffffffffffffffffff)
-                    )
+                    or(shl(0x80, sub(collateral, collateralAmount)), and(packed, 0xffffffffffffffffffffffffffffffff))
                 sstore(pSlot, full)
             }
         }
@@ -89,12 +84,9 @@ abstract contract Storage {
         }
     }
 
-    function _storeCollateralConfig(
-        address token,
-        address priceFeedAddress,
-        uint48 ratio,
-        uint48 liqThreshold
-    ) internal {
+    function _storeCollateralConfig(address token, address priceFeedAddress, uint48 ratio, uint48 liqThreshold)
+        internal
+    {
         bytes32 slot = _positionSlot(msg.sender, token);
         assembly ("memory-safe") {
             let f := or(or(shl(0x60, priceFeedAddress), shl(0x30, ratio)), liqThreshold)
