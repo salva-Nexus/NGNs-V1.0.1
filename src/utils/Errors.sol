@@ -7,4 +7,6 @@ abstract contract Errors {
     error NGNSEngine__BreachesCollateralRatio();
     error NGNSEngine__InvalidCollateralRatio();
     error NGNSEngine__CollateralLive();
+    error NGNSEngine__InvalidLiqThreshold();
+    error NGNSEngine__ZeroAmount();
 }

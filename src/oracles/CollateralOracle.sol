@@ -7,7 +7,13 @@ abstract contract CollateralOracle {
     function priceFeed(address pFeed)
         public
         view
-        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
     {
         AggregatorV3Interface dataFeed = AggregatorV3Interface(pFeed);
         return dataFeed.latestRoundData();
