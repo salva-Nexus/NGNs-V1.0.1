@@ -2,7 +2,6 @@
 pragma solidity ^0.8.30;
 
 import { NGNS } from "../src/NGNS.sol";
-import { NGNSEngine } from "../src/NGNSEngine.sol";
 import { NGNOracle } from "../src/oracles/NGNOracle.sol";
 import { Errors } from "../src/utils/Errors.sol";
 import { MockAggregatorV3 } from "./Mocks/MockAggregatorV3.t.sol";
@@ -14,7 +13,6 @@ import { Test, console } from "forge-std/Test.sol";
 abstract contract BaseTest is Test {
     address internal OWNER;
     address internal USERA;
-    NGNSEngine internal engine;
     NGNS internal ngns;
     NGNOracle internal ngnOracle;
     MockWETH internal mockWETH;
@@ -30,9 +28,6 @@ abstract contract BaseTest is Test {
         console.log(unicode"OWNER ✅                       =>                  ", OWNER);
         USERA = makeAddr("USERA");
         _changePrank(OWNER);
-        ngns = new NGNS();
-        console.log(unicode"NGNS ✅                        =>                  ", address(ngns));
-
         NGNOracle oracle = new NGNOracle();
         bytes memory oracleInitData = abi.encodeWithSelector(oracle.initialize.selector, usdPricePerNgn);
         ERC1967Proxy oracleProxy = new ERC1967Proxy(address(oracle), oracleInitData);
@@ -40,14 +35,14 @@ abstract contract BaseTest is Test {
         ngnOracle = NGNOracle(address(oracleProxy));
         console.log(unicode"NGN Oracle ✅                  =>                  ", address(ngnOracle));
 
-        engine = new NGNSEngine(address(ngns), address(ngnOracle));
-        console.log(unicode"NGN Engine ✅                  =>                  ", address(engine));
-        ngns.setEngine(address(engine));
+        ngns = new NGNS(address(ngnOracle));
+        console.log(unicode"NGNS ✅                        =>                  ", address(ngns));
 
         _deal(OWNER);
         mockWETH = new MockWETH();
         mockWETH.deposit{ value: wethToMint }();
         mockAggregatorV3ForWeth = new MockAggregatorV3(8, int256(wethToUsdPrice));
+        ngns.whitelistCollateralToken(address(mockWETH), address(mockAggregatorV3ForWeth));
         console.log(unicode"WETH TOKEN ✅                  =>                  ", address(mockWETH));
         console.log(unicode"WETH PRICE FEED ✅             =>                  ", address(mockAggregatorV3ForWeth));
 
@@ -63,10 +58,9 @@ abstract contract BaseTest is Test {
         uint48 plainThreshold = 130;
         uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
         _changePrank(OWNER);
-        engine.registerCollateral(
-            address(mockWETH), address(mockAggregatorV3ForWeth), scaledToBps, thresholdScaledToBps
-        );
-        NGNSEngine.CollateralConfig memory config = engine.collateralConfig(OWNER, address(mockWETH));
+        ngns.whitelistCollateralToken(address(mockWETH), address(mockAggregatorV3ForWeth));
+        ngns.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        NGNS.CollateralConfig memory config = ngns.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
         assertEq(config.customCollateralRatio, scaledToBps);
         assertEq(config.customLiqThreshold, thresholdScaledToBps);
@@ -77,8 +71,7 @@ abstract contract BaseTest is Test {
     function _assertions() internal view returns (bool) {
         (, int256 wethPrice,,,) = mockAggregatorV3ForWeth.latestRoundData();
         (uint256 usdPricePerNgnFromOracle,) = ngnOracle.getUsdPricePerNgn();
-        return ngns.NGNS_ENGINE() == address(engine) && usdPricePerNgnFromOracle == usdPricePerNgn
-            && uint256(wethPrice) == wethToUsdPrice && engine.UPGRADE_ROLE() != bytes32(0)
+        return usdPricePerNgnFromOracle == usdPricePerNgn && uint256(wethPrice) == wethToUsdPrice
             && IERC20(mockWETH).balanceOf(OWNER) == wethToMint && OWNER.balance == wethToMint;
     }
 

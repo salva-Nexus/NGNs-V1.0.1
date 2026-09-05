@@ -2,14 +2,18 @@
 pragma solidity ^0.8.30;
 
 abstract contract Errors {
-    error NGNSEngine__UnsupportedCollateral();
-    error NGNSEngine__InvalidOracle();
-    error NGNSEngine__BreachesCollateralRatio();
-    error NGNSEngine__InvalidCollateralRatio();
-    error NGNSEngine__CollateralLive();
-    error NGNSEngine__InvalidLiqThreshold();
-    error NGNSEngine__ZeroAmount();
-    error NGNSEngine__StalePrice();
-    error NGNSEngine__InvalidRound();
-    error NGNSEngine__InvalidThresholdBuffer();
+    error NGNS__UnsupportedCollateral();
+    error NGNS__InvalidOracle();
+    error NGNS__BreachesCollateralRatio();
+    error NGNS__InvalidCollateralRatio();
+    error NGNS__CollateralLive();
+    error NGNS__InvalidLiqThreshold();
+    error NGNS__ZeroAmount();
+    error NGNS__StalePrice();
+    error NGNS__InvalidRound();
+    error NGNS__InvalidThresholdBuffer();
+    error NGNs__NotAllowed();
+    error NGNs__InvalidAddress();
+    error NGNS__TokenNotWhitelisted();
+    error NGNS__InvalidPriceFeed();
 }

@@ -1,30 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-// VALUES AND POSITIONS ARE STORED IN NGN
 abstract contract Storage {
+    bytes32 public constant COLLATERAL_MANAGER_ROLE = keccak256("COLLATERAL_MANAGER_ROLE");
     uint256 internal constant MIN_COLLATERAL_RATIO = 15000; // 150% in BPS
     uint256 internal constant BPS_DENOMINATOR = 10000;
     uint256 internal constant MIN_LIQ_THRESHOLD = 11500;
     uint256 internal constant DECIMAL_SCALER = 10 ** 18;
     uint256 internal constant STALE_PRICE_THRESHOLD = 2 hours;
-    address internal ngns;
+
     address internal ngnPriceFeed;
 
     struct CollateralConfig {
-        // FOR REFERENCE
         address priceFeed;
         uint48 customCollateralRatio;
         uint48 customLiqThreshold;
     }
 
     struct PositionConfig {
-        // FOR REFERENCE
         uint128 collateralDeposited;
         uint128 mintedNgns;
     }
+
     mapping(address => bytes32) internal positionsConfig;
-    bytes32 public constant UPGRADE_ROLE = keccak256("UPGRADE_ROLE");
+    mapping(address token => address priceFeed) public allowedCollateralFeeds;
 
     function _positionSlot(address user, address token) internal pure returns (bytes32 slot) {
         assembly ("memory-safe") {
@@ -35,7 +34,7 @@ abstract contract Storage {
         }
     }
 
-    function _loadPositions(bytes32 slot)
+    function _loadPositionsConfig(bytes32 slot)
         internal
         view
         returns (uint128 totalCollateralDeposited, uint128 totalNgnsDebt)
@@ -48,7 +47,7 @@ abstract contract Storage {
         }
     }
 
-    function _storeCollateralPosition(address token, uint128 collateralAmount, uint8 action) internal {
+    function _updateCollateralValue(address token, uint128 collateralAmount, uint8 action) internal {
         bytes32 slot = _positionSlot(msg.sender, token);
         if (action == 1) {
             assembly ("memory-safe") {
@@ -66,6 +65,27 @@ abstract contract Storage {
                 let collateral := shr(0x80, packed)
                 let full :=
                     or(shl(0x80, sub(collateral, collateralAmount)), and(packed, 0xffffffffffffffffffffffffffffffff))
+                sstore(pSlot, full)
+            }
+        }
+    }
+
+    function _updateDebtValue(address token, uint128 debtAmount, uint8 action) internal {
+        bytes32 slot = _positionSlot(msg.sender, token);
+        if (action == 1) {
+            assembly ("memory-safe") {
+                let pSlot := add(slot, 0x01)
+                let packed := sload(pSlot)
+                let debt := and(packed, 0xffffffffffffffffffffffffffffffff)
+                let full := or(add(debtAmount, debt), and(packed, not(0xffffffffffffffffffffffffffffffff)))
+                sstore(pSlot, full)
+            }
+        } else {
+            assembly ("memory-safe") {
+                let pSlot := add(slot, 0x01)
+                let packed := sload(pSlot)
+                let debt := and(packed, 0xffffffffffffffffffffffffffffffff)
+                let full := or(sub(debtAmount, debt), and(packed, not(0xffffffffffffffffffffffffffffffff)))
                 sstore(pSlot, full)
             }
         }
