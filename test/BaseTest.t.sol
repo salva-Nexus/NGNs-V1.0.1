@@ -7,7 +7,7 @@ import { PositionManager } from "../src/PositionManager.sol";
 import { NGNOracle } from "../src/oracles/NGNOracle.sol";
 import { Errors } from "../src/utils/Errors.sol";
 import { MockAggregatorV3 } from "./Mocks/MockAggregatorV3.t.sol";
-import { MockWETH } from "./Mocks/MockWETH.t.sol";
+import { MockWETH } from "./Mocks/MockWeth.t.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { Test, console } from "forge-std/Test.sol";
