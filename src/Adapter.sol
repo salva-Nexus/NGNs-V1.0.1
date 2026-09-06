@@ -10,7 +10,6 @@ interface INGNS {
 
 contract Adapter is AccessControl {
     bytes32 public constant MANAGER_ADMIN_ROLE = keccak256("MANAGER_ADMIN_ROLE");
-
     INGNS public immutable ngns;
 
     mapping(address positionManager => bool isAllowed) public isPositionManager;
