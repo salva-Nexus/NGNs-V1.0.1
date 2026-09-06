@@ -37,26 +37,26 @@ abstract contract CollateralOracle is Storage, Errors {
         uint256 collaterAmountToNgn = (collaterAmountToUsd * ngnPricePerUsd)
             / (10 ** AggregatorV3Interface(pFeed).decimals() * 10 ** ngnOracleDecimals);
         // NOW GET THE ABSOLUTE VALUE SCALED TO THE DECIMALS OF NGNS CONTRACT
-        uint8 ngnsDecimals = IERC20Metadata(address(this)).decimals();
+        uint8 ngnsDecimals = IERC20Metadata(ngns).decimals();
         uint8 collateralDecimals = IERC20Metadata(token).decimals();
         ngnValue = (collaterAmountToNgn * 10 ** ngnsDecimals) / 10 ** collateralDecimals;
     }
 
     function _stalenessCheckNgn(uint256 lastUpdated) internal view {
         if (block.timestamp - lastUpdated > STALE_PRICE_THRESHOLD) {
-            revert NGNS__StalePrice();
+            revert PM__StalePrice();
         }
     }
 
     function _stalenessCheckChainlink(uint256 lastUpdated, uint80 roundId, uint80 answeredInRound) internal view {
         if (block.timestamp - lastUpdated > STALE_PRICE_THRESHOLD) {
-            revert NGNS__StalePrice();
+            revert PM__StalePrice();
         }
         if (answeredInRound < roundId) {
-            revert NGNS__StalePrice();
+            revert PM__StalePrice();
         }
         if (roundId == 0) {
-            revert NGNS__InvalidRound();
+            revert PM__InvalidRound();
         }
     }
 }

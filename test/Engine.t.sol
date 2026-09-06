@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import { NGNS } from "../src/NGNS.sol";
+import { PositionManager } from "../src/PositionManager.sol";
 import { Errors } from "../src/utils/Errors.sol";
 import { BaseTest } from "./BaseTest.t.sol";
 import { console } from "forge-std/console.sol";
@@ -13,9 +13,8 @@ contract Engine is BaseTest {
         uint48 plainThreshold = 130;
         uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
         _changePrank(OWNER);
-        ngns.whitelistCollateralToken(address(mockWETH), address(mockAggregatorV3ForWeth));
-        ngns.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
-        NGNS.CollateralConfig memory config = ngns.collateralConfig(OWNER, address(mockWETH));
+        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        PositionManager.CollateralConfig memory config = positionManager.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
         assertEq(config.customCollateralRatio, scaledToBps);
         assertEq(config.customLiqThreshold, thresholdScaledToBps);
@@ -24,28 +23,26 @@ contract Engine is BaseTest {
     }
 
     function _test_cannotRegisterSameCollateral(uint48 scaledToBps, uint48 thresholdScaledToBps) internal {
-        vm.expectRevert(Errors.NGNS__CollateralLive.selector);
-        ngns.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
-
-        _test_cannotRegisterMinCollateralRatio(thresholdScaledToBps);
+        vm.expectRevert(Errors.PM__CollateralLive.selector);
+        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
     }
 
-    function _test_cannotRegisterMinCollateralRatio(uint48 thresholdScaledToBps) internal {
-        address newMockWETH = address(_newMockWeth());
-        address newMockAggr = address(_newMockAggregator());
-        ngns.whitelistCollateralToken(address(newMockWETH), address(newMockAggr));
+    function test_cannotRegisterMinCollateralRatio() external {
+        uint48 plainThreshold = 130;
+        uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
+        _changePrank(OWNER);
         for (uint48 ratio = 0; ratio < 150; ratio++) {
-            vm.expectRevert(Errors.NGNS__InvalidCollateralRatio.selector);
-            ngns.registerCollateral(newMockWETH, ratio * BPS_SCALER, thresholdScaledToBps);
+            vm.expectRevert(Errors.PM__InvalidCollateralRatio.selector);
+            positionManager.registerCollateral(address(mockWETH), ratio * BPS_SCALER, thresholdScaledToBps);
         }
         uint48 ratioScaled = 160 * BPS_SCALER;
-        _test_cannotRegisterMinThreshold(newMockWETH, ratioScaled);
+        _test_cannotRegisterMinThreshold(ratioScaled);
     }
 
-    function _test_cannotRegisterMinThreshold(address newMock, uint48 ratio) internal {
+    function _test_cannotRegisterMinThreshold(uint48 ratio) internal {
         for (uint48 liqThreshold = 0; liqThreshold < 115; liqThreshold++) {
-            vm.expectRevert(Errors.NGNS__InvalidLiqThreshold.selector);
-            ngns.registerCollateral(newMock, ratio, liqThreshold * BPS_SCALER);
+            vm.expectRevert(Errors.PM__InvalidLiqThreshold.selector);
+            positionManager.registerCollateral(address(mockWETH), ratio, liqThreshold * BPS_SCALER);
         }
     }
 
@@ -53,14 +50,14 @@ contract Engine is BaseTest {
         uint256 wethDecimals = mockWETH.decimals();
         uint256 depositAmount = 10 * 10 ** wethDecimals;
         _changePrank(OWNER);
-        mockWETH.approve(address(ngns), depositAmount);
-        ngns.depositCollateral(address(mockWETH), uint128(depositAmount));
-        NGNS.PositionConfig memory position = ngns.positionConfig(OWNER, address(mockWETH));
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+        PositionManager.PositionConfig memory position = positionManager.positionConfig(OWNER, address(mockWETH));
         console.log("WETH DEPOSIT AMOUNT TO NAIRA VALUE: ", position.collateralDeposited);
         console.log(
             position.collateralDeposited / 10 ** mockWETH.decimals(),
             ": ",
-            ngns.getNgnValue(address(mockWETH), depositAmount),
+            positionManager.getNgnValue(address(mockWETH), depositAmount),
             "NGNS"
         );
         assertEq(position.collateralDeposited, depositAmount);
@@ -74,11 +71,12 @@ contract Engine is BaseTest {
         bytes memory data = abi.encodeWithSignature("deposit()");
         (bool success,) = newMock.call{ value: depositAmount }(data);
         console.log("MINT WETH SUCCESS: ", success);
-        bytes memory data2 = abi.encodeWithSignature("approve(address,uint256)", address(ngns), depositAmount);
+        bytes memory data2 =
+            abi.encodeWithSignature("approve(address,uint256)", address(positionManager), depositAmount);
         (bool success2,) = newMock.call(data2);
         console.log("APPROVE SUCCESS: ", success2);
-        vm.expectRevert(Errors.NGNS__UnsupportedCollateral.selector);
-        ngns.depositCollateral(newMock, uint128(depositAmount));
+        vm.expectRevert(Errors.PM__UnsupportedCollateral.selector);
+        positionManager.depositCollateral(newMock, uint128(depositAmount));
     }
 
     function test_Borrow() external init {
@@ -87,19 +85,18 @@ contract Engine is BaseTest {
         uint256 ngnsDecimals = ngns.decimals();
         uint256 depositAmount = 10 * 10 ** wethDecimals;
         uint256 debtAmount = 5000 * 10 ** ngnsDecimals;
-        console.log("NGN VALUE OF 10 WETH: ", ngns.getNgnValue(address(mockWETH), depositAmount));
-        _changePrank(OWNER);
-        mockWETH.approve(address(ngns), depositAmount);
-        ngns.depositCollateral(address(mockWETH), uint128(depositAmount));
-        uint256 initialHealth = ngns.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("NGN VALUE OF 10 WETH: ", positionManager.getNgnValue(address(mockWETH), depositAmount));
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+        uint256 initialHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
         console.log("INITIAL HEALTH: ", initialHealth);
 
-        ngns.mintNgns(address(mockWETH), uint128(debtAmount));
-        (, NGNS.PositionConfig memory positions) = ngns.userConfig(OWNER, address(mockWETH));
+        positionManager.mintNgns(address(mockWETH), uint128(debtAmount));
+        (, PositionManager.PositionConfig memory positions) = positionManager.userConfig(OWNER, address(mockWETH));
         console.log("NGN COLLATERAL: ", positions.collateralDeposited);
         console.log("NGN DEBT: ", positions.mintedNgns);
 
-        uint256 newHealth = ngns.userPositionHealth(OWNER, address(mockWETH), 0);
+        uint256 newHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
         console.log("NEW HEALTH: ", newHealth);
 
         assertLt(newHealth, initialHealth);
@@ -110,17 +107,17 @@ contract Engine is BaseTest {
     function _newBorrow(uint256 depositAmount, uint256 initialHealth) internal {
         uint256 ngnsDecimals = ngns.decimals();
         uint256 debtAmount = 14000000 * 10 ** ngnsDecimals;
-        uint256 expectedNewHealth = ngns.userPositionHealth(OWNER, address(mockWETH), debtAmount);
+        uint256 expectedNewHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), debtAmount);
         console.log("EXPECTED NEW HEALTH: ", expectedNewHealth);
-        console.log("NGN VALUE OF 10 WETH: ", ngns.getNgnValue(address(mockWETH), depositAmount));
-        _changePrank(OWNER);
+        console.log("NGN VALUE OF 10 WETH: ", positionManager.getNgnValue(address(mockWETH), depositAmount));
 
-        ngns.mintNgns(address(mockWETH), uint128(debtAmount));
-        (, NGNS.PositionConfig memory positions) = ngns.userConfig(OWNER, address(mockWETH));
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.mintNgns(address(mockWETH), uint128(debtAmount));
+        (, PositionManager.PositionConfig memory positions) = positionManager.userConfig(OWNER, address(mockWETH));
         console.log("NGN COLLATERAL: ", positions.collateralDeposited);
         console.log("NGN DEBT: ", positions.mintedNgns);
 
-        uint256 newHealth = ngns.userPositionHealth(OWNER, address(mockWETH), 0);
+        uint256 newHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
         console.log("NEW HEALTH: ", newHealth);
 
         assertLt(newHealth, initialHealth);
@@ -132,7 +129,7 @@ contract Engine is BaseTest {
         console.log("INITIAL HEALTH: ", initialHealth);
         int256 newPrice = 1600e8;
         mockAggregatorV3ForWeth.updateAnswer(newPrice);
-        uint256 newHealth = ngns.userPositionHealth(OWNER, address(mockWETH), 0);
+        uint256 newHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
         console.log("NEW HEALTH: ", newHealth);
 
         assertLt(newHealth, initialHealth);
@@ -148,19 +145,19 @@ contract Engine is BaseTest {
         ngnOracle.updatePrice(newPrice);
         (uint256 newUsdPrice,) = ngnOracle.getUsdPricePerNgn();
         console.log("NEW USD PER NGN PRICE: ", newUsdPrice);
-        uint256 newHealth = ngns.userPositionHealth(OWNER, address(mockWETH), 0);
+        uint256 newHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
 
         assertGt(newHealth, initialHealth);
         console.log("NEW HEALTH: ", newHealth);
     }
 
-    function test_shift() external pure {
-        bytes32 f;
-        assembly ("memory-safe") {
-            f := or(shl(0x80, 15000), 13000)
-        }
+    // function test_shift() external pure {
+    //     bytes32 f;
+    //     assembly ("memory-safe") {
+    //         f := or(shl(0x80, 15000), 13000)
+    //     }
 
-        console.logBytes32(f);
-        // 23809523800000
-    }
+    //     console.logBytes32(f);
+    //     // 23809523800000
+    // }
 }

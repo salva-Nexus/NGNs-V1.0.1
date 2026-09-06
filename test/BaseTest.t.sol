@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import { Adapter } from "../src/Adapter.sol";
 import { NGNS } from "../src/NGNS.sol";
+import { PositionManager } from "../src/PositionManager.sol";
 import { NGNOracle } from "../src/oracles/NGNOracle.sol";
 import { Errors } from "../src/utils/Errors.sol";
 import { MockAggregatorV3 } from "./Mocks/MockAggregatorV3.t.sol";
@@ -14,6 +16,8 @@ abstract contract BaseTest is Test {
     address internal OWNER;
     address internal USERA;
     NGNS internal ngns;
+    Adapter internal adapter;
+    PositionManager internal positionManager;
     NGNOracle internal ngnOracle;
     MockWETH internal mockWETH;
     MockAggregatorV3 internal mockAggregatorV3ForWeth;
@@ -27,6 +31,7 @@ abstract contract BaseTest is Test {
         OWNER = makeAddr("OWNER");
         console.log(unicode"OWNER ✅                       =>                  ", OWNER);
         USERA = makeAddr("USERA");
+
         _changePrank(OWNER);
         NGNOracle oracle = new NGNOracle();
         bytes memory oracleInitData = abi.encodeWithSelector(oracle.initialize.selector, usdPricePerNgn);
@@ -35,16 +40,27 @@ abstract contract BaseTest is Test {
         ngnOracle = NGNOracle(address(oracleProxy));
         console.log(unicode"NGN Oracle ✅                  =>                  ", address(ngnOracle));
 
-        ngns = new NGNS(address(ngnOracle));
+        ngns = new NGNS();
+        adapter = new Adapter(address(ngns));
+        ngns._setAdapter(address(adapter));
         console.log(unicode"NGNS ✅                        =>                  ", address(ngns));
+        console.log(unicode"ADAPTER ✅                     =>                  ", address(adapter));
 
         _deal(OWNER);
         mockWETH = new MockWETH();
         mockWETH.deposit{ value: wethToMint }();
         mockAggregatorV3ForWeth = new MockAggregatorV3(8, int256(wethToUsdPrice));
-        ngns.whitelistCollateralToken(address(mockWETH), address(mockAggregatorV3ForWeth));
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(mockWETH);
+
+        address[] memory priceFeeds = new address[](1);
+        priceFeeds[0] = address(mockAggregatorV3ForWeth);
+
+        positionManager = new PositionManager(address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds);
+        adapter.setPositionManager(address(positionManager), true);
         console.log(unicode"WETH TOKEN ✅                  =>                  ", address(mockWETH));
         console.log(unicode"WETH PRICE FEED ✅             =>                  ", address(mockAggregatorV3ForWeth));
+        console.log(unicode"POSITION MANAGER ✅            =>                  ", address(positionManager));
 
         bool ensureSuccess = _assertions();
         if (ensureSuccess) console.log(unicode"✅ SETUP SUCCESSFUL!!", ensureSuccess);
@@ -58,9 +74,8 @@ abstract contract BaseTest is Test {
         uint48 plainThreshold = 130;
         uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
         _changePrank(OWNER);
-        ngns.whitelistCollateralToken(address(mockWETH), address(mockAggregatorV3ForWeth));
-        ngns.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
-        NGNS.CollateralConfig memory config = ngns.collateralConfig(OWNER, address(mockWETH));
+        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        PositionManager.CollateralConfig memory config = positionManager.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
         assertEq(config.customCollateralRatio, scaledToBps);
         assertEq(config.customLiqThreshold, thresholdScaledToBps);

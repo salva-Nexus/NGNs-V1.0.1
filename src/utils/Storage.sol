@@ -9,7 +9,9 @@ abstract contract Storage {
     uint256 internal constant DECIMAL_SCALER = 10 ** 18;
     uint256 internal constant STALE_PRICE_THRESHOLD = 2 hours;
 
-    address internal ngnPriceFeed;
+    address internal immutable ngns;
+    address internal immutable ngnPriceFeed;
+    address internal immutable adapter;
 
     struct CollateralConfig {
         address priceFeed;

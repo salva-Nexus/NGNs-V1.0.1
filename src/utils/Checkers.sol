@@ -6,27 +6,27 @@ import { Views } from "./Views.sol";
 abstract contract Checkers is Views {
     function _checkCollateralReq(address token, uint256 price, uint256 ratio, uint256 liqThreshold) internal view {
         if (isRegisteredCollateral(msg.sender, token)) {
-            revert NGNS__CollateralLive();
+            revert PM__CollateralLive();
         }
 
-        if (price <= 0) revert NGNS__InvalidOracle();
+        if (price <= 0) revert PM__InvalidOracle();
 
         if (ratio < MIN_COLLATERAL_RATIO) {
-            revert NGNS__InvalidCollateralRatio();
+            revert PM__InvalidCollateralRatio();
         }
 
         if (liqThreshold < MIN_LIQ_THRESHOLD) {
-            revert NGNS__InvalidLiqThreshold();
+            revert PM__InvalidLiqThreshold();
         }
 
-        if (liqThreshold >= ratio) revert NGNS__InvalidThresholdBuffer();
+        if (liqThreshold >= ratio) revert PM__InvalidThresholdBuffer();
     }
 
     function _checkDepositAndMintReq(address token, uint256 amount) internal view {
         if (!isRegisteredCollateral(msg.sender, token)) {
-            revert NGNS__UnsupportedCollateral();
+            revert PM__UnsupportedCollateral();
         }
-        if (amount <= 0) revert NGNS__ZeroAmount();
+        if (amount <= 0) revert PM__ZeroAmount();
     }
 
     function _validatePositionHealth(
@@ -40,6 +40,6 @@ abstract contract Checkers is Views {
 
         uint256 collateralValue = ngnValue;
         uint256 maxBorrow = (collateralValue * BPS_DENOMINATOR) / config.customCollateralRatio;
-        if (debt + ngnsAmountToMint > maxBorrow) revert NGNS__BreachesCollateralRatio();
+        if (debt + ngnsAmountToMint > maxBorrow) revert PM__BreachesCollateralRatio();
     }
 }
