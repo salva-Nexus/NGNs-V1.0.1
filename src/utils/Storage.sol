@@ -8,6 +8,8 @@ abstract contract Storage {
     uint256 internal constant MIN_LIQ_THRESHOLD = 11500;
     uint256 internal constant DECIMAL_SCALER = 10 ** 18;
     uint256 internal constant STALE_PRICE_THRESHOLD = 2 hours;
+    uint256 internal constant LIQ_BONUS = 10; // 10%
+    uint256 internal constant PERCENTAGE_SCALER = 100;
 
     address internal immutable ngns;
     address internal immutable ngnPriceFeed;
@@ -49,8 +51,8 @@ abstract contract Storage {
         }
     }
 
-    function _updateCollateralValue(address token, uint128 collateralAmount, uint8 action) internal {
-        bytes32 slot = _positionSlot(msg.sender, token);
+    function _updateCollateralValue(address user, address token, uint128 collateralAmount, uint8 action) internal {
+        bytes32 slot = _positionSlot(user, token);
         if (action == 1) {
             assembly ("memory-safe") {
                 let pSlot := add(slot, 0x01)
@@ -65,6 +67,9 @@ abstract contract Storage {
                 let pSlot := add(slot, 0x01)
                 let packed := sload(pSlot)
                 let collateral := shr(0x80, packed)
+                if gt(collateralAmount, collateral) {
+                    revert(0x00, 0x00)
+                }
                 let full :=
                     or(shl(0x80, sub(collateral, collateralAmount)), and(packed, 0xffffffffffffffffffffffffffffffff))
                 sstore(pSlot, full)
@@ -72,8 +77,8 @@ abstract contract Storage {
         }
     }
 
-    function _updateDebtValue(address token, uint128 debtAmount, uint8 action) internal {
-        bytes32 slot = _positionSlot(msg.sender, token);
+    function _updateDebtValue(address user, address token, uint128 debtAmount, uint8 action) internal {
+        bytes32 slot = _positionSlot(user, token);
         if (action == 1) {
             assembly ("memory-safe") {
                 let pSlot := add(slot, 0x01)
@@ -87,7 +92,10 @@ abstract contract Storage {
                 let pSlot := add(slot, 0x01)
                 let packed := sload(pSlot)
                 let debt := and(packed, 0xffffffffffffffffffffffffffffffff)
-                let full := or(sub(debtAmount, debt), and(packed, not(0xffffffffffffffffffffffffffffffff)))
+                if gt(debtAmount, debt) {
+                    revert(0x00, 0x00)
+                }
+                let full := or(sub(debt, debtAmount), and(packed, not(0xffffffffffffffffffffffffffffffff)))
                 sstore(pSlot, full)
             }
         }
@@ -106,10 +114,14 @@ abstract contract Storage {
         }
     }
 
-    function _storeCollateralConfig(address token, address priceFeedAddress, uint48 ratio, uint48 liqThreshold)
-        internal
-    {
-        bytes32 slot = _positionSlot(msg.sender, token);
+    function _storeCollateralConfig(
+        address user,
+        address token,
+        address priceFeedAddress,
+        uint48 ratio,
+        uint48 liqThreshold
+    ) internal {
+        bytes32 slot = _positionSlot(user, token);
         assembly ("memory-safe") {
             let f := or(or(shl(0x60, priceFeedAddress), shl(0x30, ratio)), liqThreshold)
             sstore(slot, f)

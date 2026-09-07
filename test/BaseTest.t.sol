@@ -83,7 +83,12 @@ abstract contract BaseTest is Test {
         _stopPrank();
     }
 
-    function _assertions() internal view returns (bool) {
+    function _assertions() internal returns (bool) {
+        try ngns._setAdapter(address(adapter)) {
+            return false;
+        } catch (bytes memory data) {
+            console.logBytes(data);
+        }
         (, int256 wethPrice,,,) = mockAggregatorV3ForWeth.latestRoundData();
         (uint256 usdPricePerNgnFromOracle,) = ngnOracle.getUsdPricePerNgn();
         return usdPricePerNgnFromOracle == usdPricePerNgn && uint256(wethPrice) == wethToUsdPrice

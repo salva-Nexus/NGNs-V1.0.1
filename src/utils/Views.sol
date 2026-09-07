@@ -33,13 +33,11 @@ abstract contract Views is Storage, CollateralOracle {
 
     function userPositionHealth(address user, address token, uint256 debtAmount) public view returns (uint256) {
         (, PositionConfig memory positions) = userConfig(user, token);
-        uint256 ngnValue = getNgnValue(token, uint256(positions.collateralDeposited));
+        uint256 nValue = ngnValue(token, uint256(positions.collateralDeposited));
 
         return debtAmount == 0
-            ? positions.mintedNgns > 0
-                ? (ngnValue * BPS_DENOMINATOR) / uint256(positions.mintedNgns)
-                : type(uint256).max
-            : (ngnValue * BPS_DENOMINATOR) / (uint256(positions.mintedNgns) + debtAmount);
+            ? positions.mintedNgns > 0 ? (nValue * BPS_DENOMINATOR) / uint256(positions.mintedNgns) : type(uint256).max
+            : (nValue * BPS_DENOMINATOR) / (uint256(positions.mintedNgns) + debtAmount);
     }
 
     function isRegisteredCollateral(address user, address token) public view returns (bool) {

@@ -5,8 +5,8 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract NGNS is ERC20 {
     address public adapter;
-    error NGNs__NotAllowed();
-    error NGN__AdapterAlreadyLive();
+    error NGNS__NotAllowed();
+    error NGNS__AdapterAlreadyLive();
 
     constructor() ERC20("Salva's Nigerian Naira", "NGNS") { }
 
@@ -28,11 +28,11 @@ contract NGNS is ERC20 {
     }
 
     function _onlyAdapter() internal view {
-        if (msg.sender != adapter) revert NGNs__NotAllowed();
+        if (msg.sender != adapter) revert NGNS__NotAllowed();
     }
 
     function _setAdapter(address _adapter) public {
-        if (adapter != address(0)) revert NGN__AdapterAlreadyLive();
+        if (adapter != address(0)) revert NGNS__AdapterAlreadyLive();
         adapter = _adapter;
     }
 }

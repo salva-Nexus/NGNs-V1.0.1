@@ -1,5 +1,6 @@
 [profile.default]
 src = "src"
+viaIR = true
 out = "out"
 libs = ["lib"]
 

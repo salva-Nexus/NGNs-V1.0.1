@@ -57,7 +57,7 @@ contract Engine is BaseTest {
         console.log(
             position.collateralDeposited / 10 ** mockWETH.decimals(),
             ": ",
-            positionManager.getNgnValue(address(mockWETH), depositAmount),
+            positionManager.ngnValue(address(mockWETH), depositAmount),
             "NGNS"
         );
         assertEq(position.collateralDeposited, depositAmount);
@@ -75,23 +75,23 @@ contract Engine is BaseTest {
             abi.encodeWithSignature("approve(address,uint256)", address(positionManager), depositAmount);
         (bool success2,) = newMock.call(data2);
         console.log("APPROVE SUCCESS: ", success2);
-        vm.expectRevert(Errors.PM__UnsupportedCollateral.selector);
+        vm.expectRevert(Errors.PM__UnregisteredCollateral.selector);
         positionManager.depositCollateral(newMock, uint128(depositAmount));
     }
 
-    function test_Borrow() external init {
+    function test_Open_Position() external init {
         // deposit collateral
         uint256 wethDecimals = mockWETH.decimals();
         uint256 ngnsDecimals = ngns.decimals();
         uint256 depositAmount = 10 * 10 ** wethDecimals;
         uint256 debtAmount = 5000 * 10 ** ngnsDecimals;
-        console.log("NGN VALUE OF 10 WETH: ", positionManager.getNgnValue(address(mockWETH), depositAmount));
+        console.log("NGN VALUE OF 10 WETH: ", positionManager.ngnValue(address(mockWETH), depositAmount));
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
         uint256 initialHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
         console.log("INITIAL HEALTH: ", initialHealth);
 
-        positionManager.mintNgns(address(mockWETH), uint128(debtAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
         (, PositionManager.PositionConfig memory positions) = positionManager.userConfig(OWNER, address(mockWETH));
         console.log("NGN COLLATERAL: ", positions.collateralDeposited);
         console.log("NGN DEBT: ", positions.mintedNgns);
@@ -106,13 +106,13 @@ contract Engine is BaseTest {
 
     function _newBorrow(uint256 depositAmount, uint256 initialHealth) internal {
         uint256 ngnsDecimals = ngns.decimals();
-        uint256 debtAmount = 14000000 * 10 ** ngnsDecimals;
+        uint256 debtAmount = 900_000 * 10 ** ngnsDecimals;
         uint256 expectedNewHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), debtAmount);
         console.log("EXPECTED NEW HEALTH: ", expectedNewHealth);
-        console.log("NGN VALUE OF 10 WETH: ", positionManager.getNgnValue(address(mockWETH), depositAmount));
+        console.log("NGN VALUE OF 10 WETH: ", positionManager.ngnValue(address(mockWETH), depositAmount));
 
         mockWETH.approve(address(positionManager), depositAmount);
-        positionManager.mintNgns(address(mockWETH), uint128(debtAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
         (, PositionManager.PositionConfig memory positions) = positionManager.userConfig(OWNER, address(mockWETH));
         console.log("NGN COLLATERAL: ", positions.collateralDeposited);
         console.log("NGN DEBT: ", positions.mintedNgns);
@@ -151,12 +151,75 @@ contract Engine is BaseTest {
         console.log("NEW HEALTH: ", newHealth);
     }
 
-    // function test_shift() external pure {
-    //     bytes32 f;
-    //     assembly ("memory-safe") {
-    //         f := or(shl(0x80, 15000), 13000)
-    //     }
+    function test_Settle_Debt() external init {
+        // DEPOSIT COLLATERAL AND MINT DEBT
 
-    //     console.logBytes32(f);
-    // }
+        _changePrank(OWNER);
+        uint256 wethDecimals = mockWETH.decimals();
+        uint256 ngnsDecimals = ngns.decimals();
+        uint256 depositAmount = 10 * 10 ** wethDecimals;
+        uint256 debtAmount = 1_000_000 * 10 ** ngnsDecimals;
+        console.log("NGN VALUE OF 10 WETH: ", positionManager.ngnValue(address(mockWETH), depositAmount));
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+        uint256 initialHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("INITIAL HEALTH: ", initialHealth);
+
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+        (, PositionManager.PositionConfig memory positions) = positionManager.userConfig(OWNER, address(mockWETH));
+        console.log("NGN COLLATERAL: ", positions.collateralDeposited);
+        console.log("NGN DEBT: ", positions.mintedNgns);
+
+        uint256 newHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("NEW HEALTH: ", newHealth);
+
+        assertLt(newHealth, initialHealth);
+
+        positionManager.settlePosition(address(mockWETH), uint128(debtAmount) / 2);
+        (, PositionManager.PositionConfig memory positionsAfterSettleMent) =
+            positionManager.userConfig(OWNER, address(mockWETH));
+        console.log("NGN DEBT AFTER SETTLEMENT: ", positionsAfterSettleMent.mintedNgns);
+
+        uint256 newHealthAfterSettlement = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("NEW HEALTH AFTER SETTLEMENT: ", newHealthAfterSettlement);
+
+        assertGt(newHealthAfterSettlement, newHealth);
+
+        _test_Underflow(debtAmount);
+    }
+
+    function _test_Underflow(uint256 amount) internal {
+        vm.expectRevert();
+        positionManager.settlePosition(address(mockWETH), uint128(amount) * 2);
+    }
+
+    function test_Purge_Success() external init {
+        uint48 plainRatio = 150;
+        uint48 scaledToBps = plainRatio * BPS_SCALER;
+        uint48 plainThreshold = 130;
+        uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
+
+        address borrower = USERA;
+        address liquidator = OWNER;
+        address receiver = makeAddr("RECEIVER");
+
+        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        (, PositionManager.PositionConfig memory positions) = positionManager.userConfig(borrower, address(mockWETH));
+        console.log("BORROWER CD 1: ", positions.collateralDeposited);
+        console.log("BORROWER DB 1: ", positions.mintedNgns);
+        uint256 h1 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H1: ", h1);
+        uint256 nValue = positionManager.ngnValue(address(mockWETH), depositAmount);
+        console.log("NGN VALUE: ", nValue);
+
+        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        uint256 h2 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H2: ", h2);
+    }
 }

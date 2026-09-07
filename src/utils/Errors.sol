@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 abstract contract Errors {
     error PM__UnsupportedCollateral();
+    error PM__UnregisteredCollateral();
     error PM__InvalidOracle();
     error PM__BreachesCollateralRatio();
     error PM__InvalidCollateralRatio();
@@ -16,4 +17,8 @@ abstract contract Errors {
     error PM__InvalidAddress();
     error PM__TokenNotWhitelisted();
     error PM__InvalidPriceFeed();
+    error PM__NotAllowed();
+    error PM__BalanceReadFailed();
+    error PM__InsufficientBurnAmount();
+    error PM__UndercollateralizedPosition();
 }

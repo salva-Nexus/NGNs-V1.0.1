@@ -10,13 +10,15 @@ interface INGNS {
 
 contract Adapter is AccessControl {
     bytes32 public constant MANAGER_ADMIN_ROLE = keccak256("MANAGER_ADMIN_ROLE");
+    uint256 public constant MANAGER_MINT_CAP = 1_000_000 * 10 ** 6;
     INGNS public immutable ngns;
 
     mapping(address positionManager => bool isAllowed) public isPositionManager;
 
     error Adapter__NotPositionManager();
     error Adapter__ZeroAddress();
-
+    error Adapter__MintAmountExceedsLimit(uint256, uint256);
+    error Adapter__NotAllowed();
     event PositionManagerStatusUpdated(address indexed manager, bool indexed status);
 
     modifier onlyPositionManager() {
@@ -36,12 +38,16 @@ contract Adapter is AccessControl {
     }
 
     function setPositionManager(address manager, bool status) external onlyRole(MANAGER_ADMIN_ROLE) {
+        if (!status) revert Adapter__NotAllowed();
         if (manager == address(0)) revert Adapter__ZeroAddress();
         isPositionManager[manager] = status;
         emit PositionManagerStatusUpdated(manager, status);
     }
 
     function supply(address to, uint256 amount) external onlyPositionManager {
+        if (amount > MANAGER_MINT_CAP) {
+            revert Adapter__MintAmountExceedsLimit(amount, MANAGER_MINT_CAP);
+        }
         ngns.mint(to, amount);
     }
 

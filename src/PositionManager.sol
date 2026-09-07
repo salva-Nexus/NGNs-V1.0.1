@@ -7,6 +7,7 @@ import { Events } from "./utils/Events.sol";
 import { Modifier } from "./utils/Modifier.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { console } from "forge-std/console.sol";
 
 contract PositionManager is Checkers, Events, Modifier {
     using SafeERC20 for IERC20;
@@ -47,25 +48,48 @@ contract PositionManager is Checkers, Events, Modifier {
 
         (, int256 price,,,) = priceFeed(priceFeedAddress);
         _checkCollateralReq(token, uint256(price), uint256(ratio), uint256(liqThreshold));
-        _storeCollateralConfig(token, priceFeedAddress, ratio, liqThreshold);
+        _storeCollateralConfig(msg.sender, token, priceFeedAddress, ratio, liqThreshold);
 
         emit CollateralRegistered(msg.sender, token, priceFeedAddress);
     }
 
     function depositCollateral(address token, uint128 collateralAmount) external {
         _checkDepositAndMintReq(token, uint256(collateralAmount));
-        _updateCollateralValue(token, uint128(collateralAmount), 1);
+        _updateCollateralValue(msg.sender, token, uint128(collateralAmount), 1);
         IERC20(token).safeTransferFrom(msg.sender, address(this), uint256(collateralAmount));
         emit CollateralDeposited(msg.sender, token, uint256(collateralAmount));
     }
 
-    function mintNgns(address token, uint128 ngnsAmount) external nonReentrant {
+    function openPosition(address token, uint128 ngnsAmount) external nonReentrant {
         _checkDepositAndMintReq(token, uint256(ngnsAmount));
         (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
-        uint256 ngnValue = getNgnValue(token, uint256(positions.collateralDeposited));
-        _validatePositionHealth(config, positions, ngnValue, uint256(ngnsAmount));
-        _updateDebtValue(token, ngnsAmount, 1);
+        uint256 nValue = ngnValue(token, uint256(positions.collateralDeposited));
+        _validatePositionHealth(config, positions, token, nValue, uint256(ngnsAmount));
+        _updateDebtValue(msg.sender, token, ngnsAmount, 1);
         IAdapter(adapter).supply(msg.sender, uint256(ngnsAmount));
-        emit NgnsMinted(msg.sender, token, uint256(ngnsAmount));
+        emit PositionOpened(msg.sender, token, uint256(ngnsAmount));
+    }
+
+    function settlePosition(address token, uint128 ngnsAmount) external {
+        _updateDebtValue(msg.sender, token, ngnsAmount, 0);
+        IAdapter(adapter).repay(msg.sender, ngnsAmount);
+        emit DebtSettled(msg.sender, token, ngnsAmount);
+    }
+
+    function purge(address user, address token, address receiver, uint128 ngnsAmount) external {
+        _checkPurgeReq(user, receiver, token, ngnsAmount);
+        (uint256 cValue, uint256 liqBonus) = collateralValue(token, ngnsAmount);
+        require(cValue > 0, "Amount too small");
+        // Fetch position
+        (, PositionConfig memory positions) = userConfig(user, token);
+        uint256 totalSeized = cValue + liqBonus;
+        if (totalSeized > positions.collateralDeposited) {
+            totalSeized = positions.collateralDeposited;
+        }
+        IAdapter(adapter).repay(msg.sender, uint256(ngnsAmount));
+        _updateDebtValue(user, token, ngnsAmount, 0);
+        _updateCollateralValue(user, token, uint128(totalSeized), 0);
+        IERC20(token).safeTransfer(receiver, totalSeized);
+        emit Purged(user, token, msg.sender, receiver, ngnsAmount, totalSeized, liqBonus);
     }
 }
