@@ -26,7 +26,7 @@ abstract contract Checkers is Views {
     function _checkPurgeReq(address user, address receiver, address token, uint128 ngnsAmount) internal view {
         uint256 healthBps = userPositionHealth(user, token, 0);
         (CollateralConfig memory config,) = userConfig(user, token);
-        if (healthBps > config.customLiqThreshold) revert PM__NotAllowed();
+        if (healthBps > config.customLiqThreshold || healthBps > MIN_LIQ_THRESHOLD) revert PM__NotAllowed();
         if (msg.sender == user) revert PM__NotAllowed();
 
         bytes memory data = abi.encodeWithSignature("balanceOf(address)", msg.sender);

@@ -221,5 +221,63 @@ contract Engine is BaseTest {
         positionManager.openPosition(address(mockWETH), mintAmount);
         uint256 h2 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H2: ", h2);
+
+        // Simulate WETH/USD price 25% drop
+        int256 newPrice = 1500e8;
+        mockAggregatorV3ForWeth.updateAnswer(newPrice);
+        uint256 h3 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H3: ", h3);
+        // borrower opens another position
+        uint128 newMintAmount = uint128(100_000 * 10 ** ngns.decimals());
+        positionManager.openPosition(address(mockWETH), newMintAmount);
+
+        uint256 h4 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H4: ", h4);
+
+        // still healthy, cannot liquidate
+        // Prepare Liq
+        // liquidate up to 50% of the debtors position
+        uint128 liqAmount = mintAmount / 2;
+        uint256 initialLiquidatorWethBalance = mockWETH.balanceOf(liquidator);
+        console.log("INITIAL WETH BALANCE OF LIQUIDATOR", initialLiquidatorWethBalance);
+        _changePrank(liquidator);
+        mockWETH.approve(address(positionManager), depositAmount * 10); // 10 WETH a collateral
+        positionManager.depositCollateral(address(mockWETH), depositAmount * 10);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        uint256 initialLiquidatorNgnBalance = ngns.balanceOf(liquidator);
+        console.log("INITIAL NGNS BALANCE OF LIQUIDATOR", initialLiquidatorNgnBalance);
+
+        vm.expectRevert(Errors.PM__NotAllowed.selector);
+        positionManager.purge(borrower, address(mockWETH), receiver, liqAmount);
+
+        // Simulate WETH/USD price drops another 30%
+        int256 newPrice2 = 1050e8;
+        mockAggregatorV3ForWeth.updateAnswer(newPrice2);
+        uint256 h5 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H5: ", h5);
+
+        (PositionManager.CollateralConfig memory config2,) = positionManager.userConfig(borrower, address(mockWETH));
+        assertLt(h5, config2.customLiqThreshold);
+
+        // Perform Purge not position is unhealthy
+        (uint256 cValue, uint256 liqBonus) = positionManager.collateralValue(address(mockWETH), liqAmount);
+        console.log("EXPECTED CVALUE AND BONUS FOR liquidator", cValue, liqBonus);
+        positionManager.purge(borrower, address(mockWETH), receiver, liqAmount);
+
+        (, PositionManager.PositionConfig memory positions2) = positionManager.userConfig(borrower, address(mockWETH));
+        uint256 h6 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H6: ", h6); // now above min threshold, but still at risk
+        console.log("BORROWER CD 2: ", positions2.collateralDeposited);
+        uint256 newLiquidatorNgnBalance = ngns.balanceOf(liquidator);
+        console.log("NEW NGNS BALANCE OF LIQUIDATOR", newLiquidatorNgnBalance);
+        // assertions
+        assertEq(mockWETH.balanceOf(receiver), cValue + liqBonus);
+        assertLt(positions2.collateralDeposited, positions.collateralDeposited);
+        assertEq(positions2.collateralDeposited, positions.collateralDeposited - (cValue + liqBonus));
+        assertLt(ngns.balanceOf(liquidator), initialLiquidatorNgnBalance);
+
+        // WONT WORK BECUASE ITS NOW ABOVE global MIN_LIQ_THRES, but still below custome liq thres, so in grace state
+        vm.expectRevert(Errors.PM__NotAllowed.selector);
+        positionManager.purge(borrower, address(mockWETH), receiver, liqAmount / 2);
     }
 }
