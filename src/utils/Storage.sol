@@ -3,12 +3,14 @@ pragma solidity ^0.8.30;
 
 abstract contract Storage {
     bytes32 public constant COLLATERAL_MANAGER_ROLE = keccak256("COLLATERAL_MANAGER_ROLE");
-    uint256 internal constant MIN_COLLATERAL_RATIO = 15000; // 150% in BPS
+
+    uint256 public constant MIN_COLLATERAL_RATIO = 15000; // 150% in BPS
+    uint256 public constant MIN_LIQ_THRESHOLD = 11500;
+    uint256 public constant LIQ_BONUS = 10; // 10%
+
     uint256 internal constant BPS_DENOMINATOR = 10000;
-    uint256 internal constant MIN_LIQ_THRESHOLD = 11500;
     uint256 internal constant DECIMAL_SCALER = 10 ** 18;
     uint256 internal constant STALE_PRICE_THRESHOLD = 2 hours;
-    uint256 internal constant LIQ_BONUS = 10; // 10%
     uint256 internal constant PERCENTAGE_SCALER = 100;
 
     address internal immutable ngns;
