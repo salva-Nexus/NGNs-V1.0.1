@@ -22,4 +22,5 @@ abstract contract Errors {
     error PM__InsufficientBurnAmount();
     error PM__UndercollateralizedPosition();
     error PM__CannotModifyParametersWithActiveDebt();
+    error PM__CanOnlyLiquidatePartially();
 }

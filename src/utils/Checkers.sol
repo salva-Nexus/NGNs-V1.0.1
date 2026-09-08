@@ -46,11 +46,22 @@ abstract contract Checkers is Views {
         return true;
     }
 
-    function _checkPurgeReq(address user, address receiver, address token, uint128 ngnsAmount) internal view {
+    function _checkPurgeReq(
+        address user,
+        address receiver,
+        address token,
+        uint256 ngnsAmount,
+        uint256 customLiqThreshold,
+        uint256 currentDebt
+    ) internal view returns (uint256) {
         uint256 healthBps = userPositionHealth(user, token, 0);
-        (CollateralConfig memory config,) = userConfig(user, token);
-        if (healthBps > config.customLiqThreshold || healthBps > MIN_LIQ_THRESHOLD) revert PM__NotAllowed();
+        if (healthBps > customLiqThreshold || healthBps > MIN_LIQ_THRESHOLD) revert PM__NotAllowed();
         if (msg.sender == user) revert PM__NotAllowed();
+        if (currentDebt > MIN_DEBT_FLOOR) {
+            if (ngnsAmount > currentDebt / 2) revert PM__CanOnlyLiquidatePartially();
+        } else {
+            ngnsAmount = currentDebt;
+        }
 
         bytes memory data = abi.encodeWithSignature("balanceOf(address)", msg.sender);
         (bool success, bytes memory res) = ngns.staticcall(data);
@@ -58,6 +69,7 @@ abstract contract Checkers is Views {
         uint256 liquidatorBalance = uint256(bytes32(res));
         if (liquidatorBalance < ngnsAmount) revert PM__InsufficientBurnAmount();
         if (receiver == address(0)) revert PM__InvalidAddress();
+        return ngnsAmount;
     }
 
     function _checkDepositAndMintReq(address token, uint256 amount, address priceFeed) internal view {

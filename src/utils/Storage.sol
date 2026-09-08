@@ -7,6 +7,7 @@ abstract contract Storage {
     uint256 public constant MIN_COLLATERAL_RATIO = 15000; // 150% in BPS
     uint256 public constant MIN_LIQ_THRESHOLD = 11500;
     uint256 public constant LIQ_BONUS = 10; // 10%
+    uint128 public constant MIN_DEBT_FLOOR = 500 * 10 ** 6; // Minimum debt floor (e.g. 500 NGNS)
 
     uint256 internal constant BPS_DENOMINATOR = 10000;
     uint256 internal constant DECIMAL_SCALER = 10 ** 18;

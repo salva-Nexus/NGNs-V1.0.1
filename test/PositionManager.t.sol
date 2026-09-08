@@ -432,6 +432,245 @@ contract PM is BaseTest {
         positionManager.updateCollateralConfig(token, ratio, threshold);
     }
 
+    function test_Purge_StandardPartialLiquidation_Success() external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+        address receiver = makeAddr("RECEIVER");
+
+        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+
+        // Setup borrower position
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
+
+        // Crash price to make position unhealthy
+        mockAggregatorV3ForWeth.updateAnswer(1050e8);
+
+        // Setup liquidator with required NGNS tokens to burn
+        _changePrank(liquidator);
+        mockWETH.approve(address(positionManager), depositAmount * 2);
+        positionManager.depositCollateral(address(mockWETH), depositAmount * 2);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+
+        uint128 liqAmount = mintAmount / 2; // Exactly 50%
+        (uint256 expectedCValue, uint256 expectedBonus) = positionManager.collateralValue(address(mockWETH), liqAmount);
+        uint256 expectedSeized = expectedCValue + expectedBonus;
+
+        uint256 receiverWethBefore = mockWETH.balanceOf(receiver);
+
+        positionManager.purge(borrower, address(mockWETH), receiver, liqAmount);
+
+        (, PositionManager.PositionConfig memory pos) = positionManager.userConfig(borrower, address(mockWETH));
+        assertEq(pos.mintedNgns, mintAmount + 100_000 * 10 ** ngns.decimals() - liqAmount);
+        assertEq(mockWETH.balanceOf(receiver), receiverWethBefore + expectedSeized);
+    }
+
+    function test_Purge_DustDebt_FullLiquidation_Success() external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+        address receiver = makeAddr("RECEIVER");
+        // 1. Setup borrower position with high debt relative to 1 WETH collateral
+        uint128 depositAmount = uint128(1e15);
+        console.log("NGN VALUE OF 0.001 WETH: ", positionManager.ngnValue(address(mockWETH), depositAmount));
+        // 1,100 NGNS total debt against 1 WETH
+        uint128 initialMintAmount = uint128(1_100 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), initialMintAmount);
+
+        // 2. Dump WETH price to 1,000 NGN/WETH
+        // Health = (1 * 1000) / 1100 = ~90.9% (9090 BPS) < MIN_LIQ_THRESHOLD (13000 BPS) -> Unhealthy
+        uint256 h1 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H1: ", h1);
+        mockAggregatorV3ForWeth.updateAnswer(1000e8);
+        uint256 h2 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H2: ", h2);
+
+        // 3. Setup liquidator with NGNS
+        _changePrank(liquidator);
+        mockWETH.approve(address(positionManager), depositAmount * 4);
+        positionManager.depositCollateral(address(mockWETH), depositAmount * 4);
+        positionManager.openPosition(address(mockWETH), uint128(2_000 * 10 ** ngns.decimals()));
+
+        // 4. First Purge: Liquidate 50% (550 NGNS). Position remains unhealthy (550 NGNS remaining > 500 NGNS floor)
+        positionManager.purge(borrower, address(mockWETH), receiver, initialMintAmount / 2);
+
+        (, PositionManager.PositionConfig memory posMid) = positionManager.userConfig(borrower, address(mockWETH));
+        assertEq(posMid.mintedNgns, 550 * 10 ** ngns.decimals());
+
+        // 5. Second Purge: Liquidate 50% of 550 NGNS (275 NGNS).
+        // Position remaining debt drops to 275 NGNS (which is <= MIN_DEBT_FLOOR of 500 NGNS)
+        positionManager.purge(borrower, address(mockWETH), receiver, uint128(275 * 10 ** ngns.decimals()));
+
+        (, PositionManager.PositionConfig memory posDust) = positionManager.userConfig(borrower, address(mockWETH));
+        assertEq(posDust.mintedNgns, 275 * 10 ** ngns.decimals());
+
+        // 6. Third Purge (Dust Zone): Debt is now 275 NGNS (<= 500 NGNS MIN_DEBT_FLOOR).
+        // Calling purge overrides to 100% full liquidation of remaining 275 NGNS debt.
+        positionManager.purge(borrower, address(mockWETH), receiver, 1);
+
+        (, PositionManager.PositionConfig memory posFinal) = positionManager.userConfig(borrower, address(mockWETH));
+        assertEq(posFinal.mintedNgns, 0);
+    }
+
+    function test_Cannot_Purge_ExceedingFiftyPercentCap() external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+
+        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
+
+        mockAggregatorV3ForWeth.updateAnswer(1050e8);
+
+        _changePrank(liquidator);
+        mockWETH.approve(address(positionManager), depositAmount * 10);
+        positionManager.depositCollateral(address(mockWETH), depositAmount * 10);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+
+        // Attempting to liquidate > 50% must revert
+        uint128 invalidAmount = ((mintAmount + uint128(100_000 * 10 ** ngns.decimals())) / 2) + 1;
+        vm.expectRevert(Errors.PM__CanOnlyLiquidatePartially.selector);
+        positionManager.purge(borrower, address(mockWETH), OWNER, invalidAmount);
+    }
+
+    function test_Cannot_Purge_SelfPosition() external init {
+        address borrower = USERA;
+
+        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
+
+        mockAggregatorV3ForWeth.updateAnswer(1050e8);
+
+        // Borrower trying to liquidate themselves must revert
+        vm.expectRevert(Errors.PM__NotAllowed.selector);
+        positionManager.purge(borrower, address(mockWETH), borrower, mintAmount / 2);
+    }
+
+    function test_Cannot_Purge_HealthyPosition() external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+
+        uint128 depositAmount = uint128(10 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(1_000 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+
+        _changePrank(liquidator);
+        vm.expectRevert(Errors.PM__NotAllowed.selector);
+        positionManager.purge(borrower, address(mockWETH), liquidator, mintAmount / 2);
+    }
+
+    function test_Cannot_Purge_InsufficientLiquidatorBalance() external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+
+        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
+
+        mockAggregatorV3ForWeth.updateAnswer(1050e8);
+
+        // Liquidator has 0 NGNS balance
+        _changePrank(liquidator);
+        vm.expectRevert(Errors.PM__InsufficientBurnAmount.selector);
+        positionManager.purge(borrower, address(mockWETH), liquidator, mintAmount / 2);
+    }
+
+    function test_Cannot_Purge_InvalidReceiver() external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+
+        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
+
+        mockAggregatorV3ForWeth.updateAnswer(1050e8);
+
+        _changePrank(liquidator);
+        mockWETH.approve(address(positionManager), depositAmount * 2);
+        positionManager.depositCollateral(address(mockWETH), depositAmount * 2);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+
+        // Receiver address 0 must revert
+        vm.expectRevert(Errors.PM__InvalidAddress.selector);
+        positionManager.purge(borrower, address(mockWETH), address(0), mintAmount / 2);
+    }
+
+    function testFuzz_Purge_PartialLiquidationBoundaries(uint128 rawNgnsAmount) external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+
+        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(borrower, depositAmount);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), depositAmount);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+        positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
+
+        _changePrank(liquidator);
+        mockWETH.approve(address(positionManager), depositAmount * 10);
+        positionManager.depositCollateral(address(mockWETH), depositAmount * 10);
+        positionManager.openPosition(address(mockWETH), mintAmount);
+
+        mockAggregatorV3ForWeth.updateAnswer(1050e8);
+
+        // Bound amount to strictly exceed 50%
+        uint128 maxAllowed = (mintAmount + uint128(100_000 * 10 ** ngns.decimals())) / 2;
+        vm.assume(rawNgnsAmount > maxAllowed);
+
+        vm.expectRevert(Errors.PM__CanOnlyLiquidatePartially.selector);
+        positionManager.purge(borrower, address(mockWETH), liquidator, rawNgnsAmount);
+    }
+
     function test_shift() public pure {
         bytes32 s;
         bytes32 l;

@@ -77,20 +77,26 @@ contract PositionManager is Checkers, Events, Modifier {
     }
 
     function purge(address user, address token, address receiver, uint128 ngnsAmount) external {
-        _checkPurgeReq(user, receiver, token, ngnsAmount);
+        (CollateralConfig memory config, PositionConfig memory positions) = userConfig(user, token);
+        uint256 amountToBurn = _checkPurgeReq(
+            user,
+            receiver,
+            token,
+            uint256(ngnsAmount),
+            uint256(config.customLiqThreshold),
+            uint256(positions.mintedNgns)
+        );
         (uint256 cValue, uint256 liqBonus) = collateralValue(token, ngnsAmount);
         require(cValue > 0, "Amount too small");
-        // Fetch position
-        (, PositionConfig memory positions) = userConfig(user, token);
         uint256 totalSeized = cValue + liqBonus;
         if (totalSeized > positions.collateralDeposited) {
             totalSeized = positions.collateralDeposited;
         }
-        IAdapter(adapter).repay(msg.sender, uint256(ngnsAmount));
-        _updateDebtValue(user, token, ngnsAmount, 0);
+        IAdapter(adapter).repay(msg.sender, uint256(amountToBurn));
+        _updateDebtValue(user, token, uint128(amountToBurn), 0);
         _updateCollateralValue(user, token, uint128(totalSeized), 0);
         IERC20(token).safeTransfer(receiver, totalSeized);
-        emit Purged(user, token, msg.sender, receiver, ngnsAmount, totalSeized, liqBonus);
+        emit Purged(user, token, msg.sender, receiver, amountToBurn, totalSeized, liqBonus);
     }
 
     function updateCollateralConfig(address token, uint48 newRatio, uint48 newLiqThreshold) external {
