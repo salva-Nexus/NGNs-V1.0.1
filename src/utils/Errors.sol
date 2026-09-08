@@ -21,4 +21,5 @@ abstract contract Errors {
     error PM__BalanceReadFailed();
     error PM__InsufficientBurnAmount();
     error PM__UndercollateralizedPosition();
+    error PM__CannotModifyParametersWithActiveDebt();
 }

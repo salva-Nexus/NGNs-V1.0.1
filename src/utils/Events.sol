@@ -16,4 +16,7 @@ abstract contract Events {
         uint256 collateralSeized,
         uint256 liqBonus
     );
+    event CollateralConfigUpdated(
+        address indexed user, address indexed token, uint48 customRatio, uint48 customLiqThreshold
+    );
 }

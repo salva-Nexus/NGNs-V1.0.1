@@ -42,7 +42,7 @@ contract PositionManager is Checkers, Events, Modifier {
     }
 
     /// @notice User permissionlessly registers their isolated position using a whitelisted token
-    function registerCollateral(address token, uint48 ratio, uint48 liqThreshold) external {
+    function registerCollateral(address token, uint48 ratio, uint48 liqThreshold) public {
         address priceFeedAddress = allowedCollateralFeeds[token];
         if (priceFeedAddress == address(0)) revert PM__TokenNotWhitelisted();
 
@@ -54,15 +54,15 @@ contract PositionManager is Checkers, Events, Modifier {
     }
 
     function depositCollateral(address token, uint128 collateralAmount) external {
-        _checkDepositAndMintReq(token, uint256(collateralAmount));
+        _checkDepositAndMintReq(token, uint256(collateralAmount), address(0));
         _updateCollateralValue(msg.sender, token, uint128(collateralAmount), 1);
         IERC20(token).safeTransferFrom(msg.sender, address(this), uint256(collateralAmount));
         emit CollateralDeposited(msg.sender, token, uint256(collateralAmount));
     }
 
     function openPosition(address token, uint128 ngnsAmount) external nonReentrant {
-        _checkDepositAndMintReq(token, uint256(ngnsAmount));
         (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
+        _checkDepositAndMintReq(token, uint256(ngnsAmount), config.priceFeed);
         uint256 nValue = ngnValue(token, uint256(positions.collateralDeposited));
         _validatePositionHealth(config, positions, token, nValue, uint256(ngnsAmount));
         _updateDebtValue(msg.sender, token, ngnsAmount, 1);
@@ -91,5 +91,22 @@ contract PositionManager is Checkers, Events, Modifier {
         _updateCollateralValue(user, token, uint128(totalSeized), 0);
         IERC20(token).safeTransfer(receiver, totalSeized);
         emit Purged(user, token, msg.sender, receiver, ngnsAmount, totalSeized, liqBonus);
+    }
+
+    function updateCollateralConfig(address token, uint48 newRatio, uint48 newLiqThreshold) external {
+        (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
+        bool verified = _checkUpdateReq(
+            token,
+            uint256(newRatio),
+            uint256(newLiqThreshold),
+            uint256(config.customCollateralRatio),
+            positions.mintedNgns > 0
+        );
+        if (!verified) {
+            registerCollateral(token, newRatio, newLiqThreshold);
+            return;
+        }
+        _updateCollateralConfig(msg.sender, token, newRatio, newLiqThreshold);
+        emit CollateralConfigUpdated(msg.sender, token, newRatio, newLiqThreshold);
     }
 }

@@ -6,7 +6,7 @@ import { Errors } from "../src/utils/Errors.sol";
 import { BaseTest } from "./BaseTest.t.sol";
 import { console } from "forge-std/console.sol";
 
-contract Engine is BaseTest {
+contract PM is BaseTest {
     function test_register_collateral() external {
         uint48 plainRatio = 150;
         uint48 scaledToBps = plainRatio * BPS_SCALER;
@@ -279,5 +279,174 @@ contract Engine is BaseTest {
         // WONT WORK BECUASE ITS NOW ABOVE global MIN_LIQ_THRES, but still below custome liq thres, so in grace state
         vm.expectRevert(Errors.PM__NotAllowed.selector);
         positionManager.purge(borrower, address(mockWETH), receiver, liqAmount / 2);
+    }
+
+    function test_UpdateCollateralConfig_AutoRegister_Unregistered() external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+
+        uint48 newRatio = 170 * BPS_SCALER;
+        uint48 newThreshold = 140 * BPS_SCALER;
+
+        // Route fallback should trigger registerCollateral
+        positionManager.updateCollateralConfig(token, newRatio, newThreshold);
+
+        (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
+        assertEq(config.customCollateralRatio, newRatio);
+        assertEq(config.customLiqThreshold, newThreshold);
+        assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
+    }
+
+    function test_UpdateCollateralConfig_Assembly_Both() external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+
+        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+
+        uint48 updatedRatio = 180 * BPS_SCALER;
+        uint48 updatedThreshold = 150 * BPS_SCALER;
+
+        positionManager.updateCollateralConfig(token, updatedRatio, updatedThreshold);
+
+        (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
+        assertEq(config.customCollateralRatio, updatedRatio);
+        assertEq(config.customLiqThreshold, updatedThreshold);
+    }
+
+    function test_UpdateCollateralConfig_Assembly_OnlyRatio() external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+
+        uint48 initialRatio = 160 * BPS_SCALER;
+        uint48 initialThreshold = 130 * BPS_SCALER;
+        positionManager.registerCollateral(token, initialRatio, initialThreshold);
+
+        uint48 newRatio = 190 * BPS_SCALER;
+
+        positionManager.updateCollateralConfig(token, newRatio, 0);
+
+        (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
+        assertEq(config.customCollateralRatio, newRatio);
+        assertEq(config.customLiqThreshold, initialThreshold);
+    }
+
+    function test_UpdateCollateralConfig_Assembly_OnlyThreshold() external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+
+        uint48 initialRatio = 160 * BPS_SCALER;
+        uint48 initialThreshold = 130 * BPS_SCALER;
+        positionManager.registerCollateral(token, initialRatio, initialThreshold);
+
+        uint48 newThreshold = 145 * BPS_SCALER;
+
+        positionManager.updateCollateralConfig(token, 0, newThreshold);
+
+        (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
+        assertEq(config.customCollateralRatio, initialRatio);
+        assertEq(config.customLiqThreshold, newThreshold);
+    }
+
+    function test_Cannot_UpdateCollateralConfig_WhenInDebt() external init {
+        uint128 depositAmount = uint128(2 * 10 ** mockWETH.decimals());
+        uint128 mintAmount = uint128(100_000 * 10 ** ngns.decimals());
+
+        mockWETH.transfer(USERA, depositAmount);
+        _changePrank(USERA);
+        address token = address(mockWETH);
+
+        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(token, depositAmount);
+        positionManager.openPosition(token, mintAmount);
+
+        vm.expectRevert(Errors.PM__CannotModifyParametersWithActiveDebt.selector);
+        positionManager.updateCollateralConfig(token, 180 * BPS_SCALER, 140 * BPS_SCALER);
+    }
+
+    function test_Cannot_UpdateCollateralConfig_InvalidRatio() external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+
+        uint48 invalidRatio = 120 * BPS_SCALER; // Below MIN_COLLATERAL_RATIO (150)
+
+        vm.expectRevert(Errors.PM__InvalidCollateralRatio.selector);
+        positionManager.updateCollateralConfig(token, invalidRatio, 130 * BPS_SCALER);
+    }
+
+    function test_Cannot_UpdateCollateralConfig_InvalidThreshold() external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+
+        uint48 invalidThreshold = 100 * BPS_SCALER; // Below MIN_LIQ_THRESHOLD (115)
+
+        vm.expectRevert(Errors.PM__InvalidLiqThreshold.selector);
+        positionManager.updateCollateralConfig(token, 160 * BPS_SCALER, invalidThreshold);
+    }
+
+    function test_Cannot_UpdateCollateralConfig_InvalidBuffer() external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+
+        uint48 ratio = 150 * BPS_SCALER;
+        uint48 invalidThreshold = 155 * BPS_SCALER; // threshold >= ratio
+
+        vm.expectRevert(Errors.PM__InvalidThresholdBuffer.selector);
+        positionManager.updateCollateralConfig(token, ratio, invalidThreshold);
+    }
+
+    function testFuzz_updateCollateralConfig_validBoundaries(uint48 ratio, uint48 threshold) external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+
+        // Bound parameters within safe operational limits
+        vm.assume(ratio > 150 * BPS_SCALER);
+        vm.assume(ratio < 500 * BPS_SCALER);
+        vm.assume(threshold < ratio);
+        vm.assume(threshold > 115 * BPS_SCALER);
+
+        positionManager.updateCollateralConfig(token, ratio, threshold);
+
+        PositionManager.CollateralConfig memory config = positionManager.collateralConfig(USERA, token);
+        assertEq(config.customCollateralRatio, ratio);
+        assertEq(config.customLiqThreshold, threshold);
+    }
+
+    function testFuzz_RevertIf_updateCollateralConfig_ratioBelowMin(uint48 ratio, uint48 threshold) external init {
+        _changePrank(USERA);
+        address token = address(mockWETH);
+        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+
+        // Bound ratio to strictly below MIN_COLLATERAL_RATIO (150 * BPS_SCALER)
+        // Bound threshold to valid limits so only the ratio triggers the revert
+        vm.assume(ratio > 0);
+        vm.assume(ratio < 150 * BPS_SCALER);
+        vm.assume(threshold < 150 * BPS_SCALER);
+        vm.assume(threshold > 115 * BPS_SCALER);
+
+        vm.expectRevert(Errors.PM__InvalidCollateralRatio.selector);
+        positionManager.updateCollateralConfig(token, ratio, threshold);
+    }
+
+    function test_shift() public pure {
+        bytes32 s;
+        bytes32 l;
+        bytes32 m;
+        bytes32 f;
+        assembly {
+            s := 0x1111111111111111111111111111111111111111000000444444000000555555
+            l := not(0xffffffffffff)
+            m := and(s, l)
+            f := or(m, 0x000000999999)
+        }
+
+        console.logBytes32(s);
+        console.logBytes32(l);
+        console.logBytes32(m);
+        console.logBytes32(f);
     }
 }

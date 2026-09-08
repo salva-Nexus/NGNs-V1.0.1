@@ -23,6 +23,29 @@ abstract contract Checkers is Views {
         if (liqThreshold >= ratio) revert PM__InvalidThresholdBuffer();
     }
 
+    function _checkUpdateReq(address token, uint256 newRatio, uint256 newLiqThreshold, uint256 cRatio, bool isInDebt)
+        internal
+        view
+        returns (bool)
+    {
+        if (!isRegisteredCollateral(msg.sender, token)) return false;
+
+        if (isInDebt) revert PM__CannotModifyParametersWithActiveDebt();
+
+        if (newRatio > 0) {
+            if (newRatio < MIN_COLLATERAL_RATIO) {
+                revert PM__InvalidCollateralRatio();
+            }
+        }
+
+        if (newLiqThreshold > 0) {
+            if (newLiqThreshold < MIN_LIQ_THRESHOLD) revert PM__InvalidLiqThreshold();
+            if (newRatio > 0 && newLiqThreshold >= newRatio) revert PM__InvalidThresholdBuffer();
+            if (newRatio == 0 && newLiqThreshold >= cRatio) revert PM__InvalidThresholdBuffer();
+        }
+        return true;
+    }
+
     function _checkPurgeReq(address user, address receiver, address token, uint128 ngnsAmount) internal view {
         uint256 healthBps = userPositionHealth(user, token, 0);
         (CollateralConfig memory config,) = userConfig(user, token);
@@ -37,9 +60,17 @@ abstract contract Checkers is Views {
         if (receiver == address(0)) revert PM__InvalidAddress();
     }
 
-    function _checkDepositAndMintReq(address token, uint256 amount) internal view {
-        if (!isRegisteredCollateral(msg.sender, token)) {
-            revert PM__UnregisteredCollateral();
+    function _checkDepositAndMintReq(address token, uint256 amount, address priceFeed) internal view {
+        // address priceFeed param makes it so that we have less sloads when loading positions and collateral config
+        // isRegisteredCollateral() loads the same data openPosition() loads
+        if (priceFeed == address(0)) {
+            if (!isRegisteredCollateral(msg.sender, token)) {
+                revert PM__UnregisteredCollateral();
+            }
+        } else {
+            if (priceFeed == address(0)) {
+                revert PM__UnregisteredCollateral();
+            }
         }
         if (amount <= 0) revert PM__ZeroAmount();
     }

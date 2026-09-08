@@ -114,6 +114,40 @@ abstract contract Storage {
         }
     }
 
+    function _updateCollateralConfig(address user, address token, uint48 ratio, uint48 liqThreshold) internal {
+        bytes32 slot = _positionSlot(user, token);
+        assembly ("memory-safe") {
+            let packed := sload(slot)
+
+            // Case 1: Update BOTH if both are > 0
+            if and(gt(ratio, 0x00), gt(liqThreshold, 0x00)) {
+                let f :=
+                    or(
+                        or(shl(0x30, ratio), and(liqThreshold, 0xffffffffffff)),
+                        and(packed, not(0xffffffffffffffffffffffff))
+                    )
+                sstore(slot, f)
+            }
+
+            // Case 2: Update ONLY ratio (if ratio > 0 and liqThreshold == 0)
+            if and(gt(ratio, 0x00), iszero(gt(liqThreshold, 0x00))) {
+                let r := shl(0x30, ratio)
+                let mask := 0xffffffffffffffffffffffffffffffffffffffff000000000000ffffffffffff
+                let p := and(packed, mask)
+                let f := or(p, r)
+                sstore(slot, f)
+            }
+
+            // Case 3: Update ONLY liqThreshold (if liqThreshold > 0 and ratio == 0)
+            if and(gt(liqThreshold, 0x00), iszero(gt(ratio, 0x00))) {
+                let mask := not(0xffffffffffff)
+                let p := and(packed, mask)
+                let f := or(p, and(liqThreshold, 0xffffffffffff))
+                sstore(slot, f)
+            }
+        }
+    }
+
     function _storeCollateralConfig(
         address user,
         address token,
