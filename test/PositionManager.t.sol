@@ -671,6 +671,86 @@ contract PM is BaseTest {
         positionManager.purge(borrower, address(mockWETH), liquidator, rawNgnsAmount);
     }
 
+    function test_USDC_CollateralValue_DecimalScaling() external view {
+        // 1,000,000 NGN (6 decimals)
+        uint128 ngnAmount = uint128(1_000_000 * 10 ** ngns.decimals());
+
+        (uint256 usdcRequiredValue,) = positionManager.collateralValue(address(mockUSDC), ngnAmount);
+
+        // Calculate expected value mathematically based on NGN/USD feed rate
+        (uint256 usdPricePerNgn,) = ngnOracle.getUsdPricePerNgn();
+        uint8 ngnOracleDec = ngnOracle.decimals();
+        uint256 ngnPricePerUsd = (10 ** ngnOracleDec * 10 ** ngnOracleDec) / usdPricePerNgn;
+
+        uint256 expectedUsdcValuation = (ngnAmount * 10 ** mockUSDC.decimals()) / ngnPricePerUsd;
+
+        console.log("Valuation for 1M NGN in USDC (6 decimals):", usdcRequiredValue);
+
+        assertEq(usdcRequiredValue, expectedUsdcValuation);
+    }
+
+    function test_USDC_PositionHealth_Precision() external init {
+        uint48 scaledRatio = 150 * BPS_SCALER;
+        uint48 scaledThreshold = 130 * BPS_SCALER;
+        _changePrank(USERA);
+
+        // Deposit 1,000 USDC ($1,000 USD value)
+        uint128 usdcDeposit = 1_000 * 1e6;
+        mockUSDC.mint(USERA, usdcDeposit);
+        positionManager.registerCollateral(address(mockUSDC), scaledRatio, scaledThreshold);
+        mockUSDC.approve(address(positionManager), usdcDeposit);
+        positionManager.depositCollateral(address(mockUSDC), usdcDeposit);
+
+        // Mint 500,000 NGN
+        uint128 debtNgn = uint128(500_000 * 10 ** ngns.decimals());
+        positionManager.openPosition(address(mockUSDC), debtNgn);
+
+        uint256 health = positionManager.userPositionHealth(USERA, address(mockUSDC), 0);
+
+        console.log("Position Health with USDC Collateral:", health);
+        assertGt(health, 100 * BPS_SCALER);
+    }
+
+    function test_USDC_Depeg_PurgeWorkflow() external init {
+        uint48 scaledRatio = 150 * BPS_SCALER;
+        uint48 scaledThreshold = 130 * BPS_SCALER;
+
+        // Setup Borrower
+        _changePrank(USERA);
+        uint128 usdcDeposit = 1300 * 1e6; // $1,300 USDC
+        mockUSDC.mint(USERA, usdcDeposit);
+        positionManager.registerCollateral(address(mockUSDC), scaledRatio, scaledThreshold);
+        mockUSDC.approve(address(positionManager), usdcDeposit);
+        positionManager.depositCollateral(address(mockUSDC), usdcDeposit);
+
+        // Open position for 1,000,000 NGN
+        uint128 debtNgn = uint128(1_000_000 * 10 ** ngns.decimals());
+        positionManager.openPosition(address(mockUSDC), debtNgn);
+
+        _changePrank(OWNER);
+        uint128 purgeAmount = debtNgn / 2;
+        address receiver = makeAddr("RECEIVER");
+        mockUSDC.approve(address(positionManager), usdcDeposit);
+        positionManager.depositCollateral(address(mockUSDC), usdcDeposit);
+        positionManager.openPosition(address(mockUSDC), debtNgn);
+
+        // Simulate USDC De-peg to $0.70
+        uint256 h1 = positionManager.userPositionHealth(USERA, address(mockUSDC), 0);
+        console.log("BORROWER H1: ", h1);
+        mockAggregatorUsdcUsd.updateAnswer(70_000_000);
+        uint256 h2 = positionManager.userPositionHealth(USERA, address(mockUSDC), 0);
+        console.log("BORROWER H2: ", h2);
+
+        // Liquidation check
+
+        uint256 receiverUsdcBefore = mockUSDC.balanceOf(receiver);
+        positionManager.purge(USERA, address(mockUSDC), receiver, purgeAmount);
+        uint256 receiverUsdcAfter = mockUSDC.balanceOf(receiver);
+
+        // Receiver must get paid back in 6-decimal USDC units
+        assertGt(receiverUsdcAfter, receiverUsdcBefore);
+    }
+
     function test_shift() public pure {
         bytes32 s;
         bytes32 l;

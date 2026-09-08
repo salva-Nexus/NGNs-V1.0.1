@@ -7,6 +7,7 @@ import { PositionManager } from "../src/PositionManager.sol";
 import { NGNOracle } from "../src/oracles/NGNOracle.sol";
 import { Errors } from "../src/utils/Errors.sol";
 import { MockAggregatorV3 } from "./Mocks/MockAggregatorV3.t.sol";
+import { MockUSDC } from "./Mocks/MockUSDC.t.sol";
 import { MockWETH } from "./Mocks/MockWeth.t.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -20,9 +21,12 @@ abstract contract BaseTest is Test {
     PositionManager internal positionManager;
     NGNOracle internal ngnOracle;
     MockWETH internal mockWETH;
+    MockUSDC internal mockUSDC;
     MockAggregatorV3 internal mockAggregatorV3ForWeth;
+    MockAggregatorV3 internal mockAggregatorUsdcUsd;
     uint256 internal usdPricePerNgn = 840; // 0.00084 USD per 1 NGN
     uint256 internal wethToUsdPrice = 2000e8; // 2000 USD per 1 WETH
+    uint256 internal INITIAL_USDC_USD_PRICE = 1e8;
     uint256 internal ethToDeal = 100 * 10 ** 18;
     uint256 internal wethToMint = 50 * 10 ** 18;
     uint48 internal constant BPS_SCALER = 100;
@@ -48,13 +52,18 @@ abstract contract BaseTest is Test {
 
         _deal(OWNER);
         mockWETH = new MockWETH();
+        mockUSDC = new MockUSDC();
+        mockUSDC.mint(OWNER, 1_000_000 * 10 ** mockUSDC.decimals());
         mockWETH.deposit{ value: wethToMint }();
         mockAggregatorV3ForWeth = new MockAggregatorV3(8, int256(wethToUsdPrice));
-        address[] memory tokens = new address[](1);
+        mockAggregatorUsdcUsd = new MockAggregatorV3(8, int256(INITIAL_USDC_USD_PRICE));
+        address[] memory tokens = new address[](2);
         tokens[0] = address(mockWETH);
+        tokens[1] = address(mockUSDC);
 
-        address[] memory priceFeeds = new address[](1);
+        address[] memory priceFeeds = new address[](2);
         priceFeeds[0] = address(mockAggregatorV3ForWeth);
+        priceFeeds[1] = address(mockAggregatorUsdcUsd);
 
         positionManager = new PositionManager(address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds);
         adapter.setPositionManager(address(positionManager), true);
@@ -74,6 +83,7 @@ abstract contract BaseTest is Test {
         uint48 plainThreshold = 130;
         uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
         _changePrank(OWNER);
+        positionManager.registerCollateral(address(mockUSDC), 150 * BPS_SCALER, thresholdScaledToBps);
         positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
         PositionManager.CollateralConfig memory config = positionManager.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
@@ -110,9 +120,5 @@ abstract contract BaseTest is Test {
 
     function _newMockWeth() internal returns (MockWETH) {
         return new MockWETH();
-    }
-
-    function _newMockAggregator() internal returns (MockAggregatorV3) {
-        return new MockAggregatorV3(8, int256(wethToUsdPrice));
     }
 }
