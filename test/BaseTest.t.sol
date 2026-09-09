@@ -46,7 +46,7 @@ abstract contract BaseTest is Test {
 
         ngns = new NGNS();
         adapter = new Adapter(address(ngns));
-        ngns._setAdapter(address(adapter));
+        ngns.setAdapter(address(adapter));
         console.log(unicode"NGNS ✅                        =>                  ", address(ngns));
         console.log(unicode"ADAPTER ✅                     =>                  ", address(adapter));
 
@@ -94,7 +94,7 @@ abstract contract BaseTest is Test {
     }
 
     function _assertions() internal returns (bool) {
-        try ngns._setAdapter(address(adapter)) {
+        try ngns.setAdapter(address(adapter)) {
             return false;
         } catch (bytes memory data) {
             console.logBytes(data);
