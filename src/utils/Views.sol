@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import { Storage } from "../utils/Storage.sol";
 import { CollateralOracle } from "@Oracles/CollateralOracle.sol";
+import { console } from "forge-std/console.sol";
 
 abstract contract Views is Storage, CollateralOracle {
     function collateralConfig(address user, address token) public view returns (CollateralConfig memory) {
@@ -38,6 +39,20 @@ abstract contract Views is Storage, CollateralOracle {
         return debtAmount == 0
             ? positions.mintedNgns > 0 ? (nValue * BPS_DENOMINATOR) / uint256(positions.mintedNgns) : type(uint256).max
             : (nValue * BPS_DENOMINATOR) / (uint256(positions.mintedNgns) + debtAmount);
+    }
+
+    function collateralAmountWithdrawable(address user, address token) public view returns (uint256) {
+        (CollateralConfig memory config, PositionConfig memory positions) = userConfig(user, token);
+        if (positions.collateralDeposited == 0) return 0;
+        if (positions.mintedNgns == 0) return positions.collateralDeposited;
+        uint256 nValueOfcValue = ngnValue(token, uint256(positions.collateralDeposited));
+        uint256 lockedNValueOfCvalue =
+            (uint256(positions.mintedNgns) * uint256(config.customCollateralRatio)) / BPS_DENOMINATOR;
+        if (nValueOfcValue <= lockedNValueOfCvalue) return 0;
+        uint256 excessNgn = nValueOfcValue - lockedNValueOfCvalue;
+        console.log("excessNgn", excessNgn);
+        (uint256 cValue,) = collateralValue(token, excessNgn);
+        return cValue;
     }
 
     function isRegisteredCollateral(address user, address token) public view returns (bool) {

@@ -19,4 +19,5 @@ abstract contract Events {
     event CollateralConfigUpdated(
         address indexed user, address indexed token, uint48 customRatio, uint48 customLiqThreshold
     );
+    event CollateralWithdrawn(address indexed user, address indexed token, address indexed receiver, uint128 amount);
 }

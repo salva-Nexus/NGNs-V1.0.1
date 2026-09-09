@@ -756,18 +756,186 @@ contract PM is BaseTest {
         assertGt(receiverUsdcAfter, receiverUsdcBefore);
     }
 
-    function test_shift() public view {
-        uint256 nvalue = positionManager.ngnValue(address(mockWETH), 1e18);
-        console.log(nvalue);
+    /* ========================================================================= */
+    /*                              WITHDRAW TESTS                               */
+    /* ========================================================================= */
+
+    function test_Withdraw_Full_WhenNoDebt_Success() external init {
+        uint256 depositAmount = 10 * 10 ** mockWETH.decimals();
+
+        _changePrank(OWNER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+
+        uint256 balanceBefore = mockWETH.balanceOf(OWNER);
+
+        positionManager.withdraw(address(mockWETH), OWNER, uint128(depositAmount));
+
+        (, PositionManager.PositionConfig memory position) = positionManager.userConfig(OWNER, address(mockWETH));
+        assertEq(position.collateralDeposited, 0);
+        assertEq(mockWETH.balanceOf(OWNER), balanceBefore + depositAmount);
     }
 
-    /**
-     * `testFuzz_Purge_PartialLiquidationBoundaries(uint128)`
-     * `test_Cannot_Purge_ExceedingFiftyPercentCap()`
-     * `test_Cannot_Purge_InsufficientLiquidatorBalance()`
-     * `test_Cannot_Purge_InvalidReceiver()`
-     * `test_Purge_DustDebt_FullLiquidation_Success()`
-     * `test_Purge_StandardPartialLiquidation_Success()`
-     * `test_Purge_Success()`
-     */
+    function test_Withdraw_Partial_WithHealthyDebt_Success() external init {
+        uint256 depositAmount = 10 * 10 ** mockWETH.decimals();
+        uint256 debtAmount = 500_000 * 10 ** ngns.decimals();
+        uint128 withdrawAmount = uint128(2 * 10 ** mockWETH.decimals());
+
+        _changePrank(OWNER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+
+        uint256 h1 = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("BORROWER H1: ", h1);
+
+        uint256 balanceBefore = mockWETH.balanceOf(OWNER);
+
+        positionManager.withdraw(address(mockWETH), OWNER, withdrawAmount);
+
+        uint256 h2 = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("BORROWER H2: ", h2);
+
+        (, PositionManager.PositionConfig memory position) = positionManager.userConfig(OWNER, address(mockWETH));
+        assertEq(position.collateralDeposited, depositAmount - withdrawAmount);
+        assertEq(mockWETH.balanceOf(OWNER), balanceBefore + withdrawAmount);
+    }
+
+    function test_Withdraw_ToThirdPartyReceiver_Success() external init {
+        uint256 depositAmount = 5 * 10 ** mockWETH.decimals();
+        address recipient = makeAddr("RECIPIENT");
+
+        _changePrank(OWNER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+
+        positionManager.withdraw(address(mockWETH), recipient, uint128(depositAmount));
+
+        assertEq(mockWETH.balanceOf(recipient), depositAmount);
+    }
+
+    function test_Cannot_Withdraw_WhenInitialPositionUndercollateralized() external init {
+        uint256 depositAmount = 1 * 10 ** mockWETH.decimals();
+        uint256 debtAmount = 1_000_000 * 10 ** ngns.decimals();
+
+        _changePrank(OWNER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+
+        uint256 h1 = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("BORROWER H1: ", h1);
+
+        // Crash WETH price to make initial health < customCollateralRatio
+        mockAggregatorV3ForWeth.updateAnswer(1300e8);
+
+        uint256 h2 = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("BORROWER H2: ", h2);
+
+        vm.expectRevert(Errors.PM__UndercollateralizedPosition.selector);
+        positionManager.withdraw(address(mockWETH), OWNER, 1 ether);
+    }
+
+    function test_Cannot_Withdraw_WhenFinalPositionBreachesCollateralRatio() external init {
+        uint256 depositAmount = 10 * 10 ** mockWETH.decimals();
+        uint256 debtAmount = 1_000_000 * 10 ** ngns.decimals();
+
+        _changePrank(OWNER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+
+        uint256 h1 = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+        console.log("BORROWER H1: ", h1);
+
+        // Withdraw 8 WETH -> remaining 2 WETH is insufficient collateral for debtAmount
+        uint128 excessiveWithdrawal = uint128(8 * 10 ** mockWETH.decimals());
+
+        vm.expectRevert(Errors.PM__UndercollateralizedPosition.selector);
+        positionManager.withdraw(address(mockWETH), OWNER, excessiveWithdrawal);
+    }
+
+    function test_Cannot_Withdraw_ToZeroAddress() external init {
+        uint256 depositAmount = 5 * 10 ** mockWETH.decimals();
+
+        _changePrank(OWNER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+
+        vm.expectRevert(Errors.PM__InvalidAddress.selector);
+        positionManager.withdraw(address(mockWETH), address(0), uint128(depositAmount));
+    }
+
+    function test_Cannot_Withdraw_MoreThanDeposited() external init {
+        uint256 depositAmount = 5 * 10 ** mockWETH.decimals();
+
+        _changePrank(OWNER);
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+
+        vm.expectRevert();
+        positionManager.withdraw(address(mockWETH), OWNER, uint128(depositAmount) + 1);
+    }
+
+    function test_Withdraw_AtExactWithdrawableBoundary_Success() external init {
+        uint256 depositAmount = 5 * 10 ** mockWETH.decimals();
+        uint256 debtAmount = 1_000_000 * 10 ** ngns.decimals();
+
+        _changePrank(OWNER);
+
+        mockWETH.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockWETH), uint128(depositAmount));
+
+        // No debt -> entire collateral is withdrawable
+        uint256 w1 = positionManager.collateralAmountWithdrawable(OWNER, address(mockWETH));
+        console.log("W1: ", w1);
+        assertEq(w1, depositAmount);
+
+        // Open debt
+        positionManager.openPosition(address(mockWETH), uint128(debtAmount));
+
+        uint256 withdrawable = positionManager.collateralAmountWithdrawable(OWNER, address(mockWETH));
+        console.log("WITHDRAWABLE: ", withdrawable);
+
+        // Withdraw exactly the maximum allowed amount
+        positionManager.withdraw(address(mockWETH), OWNER, uint128(withdrawable));
+
+        (, PositionManager.PositionConfig memory position) = positionManager.userConfig(OWNER, address(mockWETH));
+
+        console.log("REMAINING COLLATERAL: ", position.collateralDeposited);
+
+        // 160% collateral ratio should remain
+        uint256 finalHealth = positionManager.userPositionHealth(OWNER, address(mockWETH), 0);
+
+        console.log("FINAL HEALTH: ", finalHealth);
+
+        assertEq(position.collateralDeposited, depositAmount - withdrawable);
+        assertEq(finalHealth, 160 * BPS_SCALER);
+    }
+
+    function test_Cannot_Withdraw_AboveWithdrawableBoundary() external init {
+        uint256 depositAmount = 5000 * 10 ** mockUSDC.decimals();
+        uint256 debtAmount = 1_000_000 * 10 ** ngns.decimals();
+
+        _changePrank(OWNER);
+
+        mockUSDC.approve(address(positionManager), depositAmount);
+        positionManager.depositCollateral(address(mockUSDC), uint128(depositAmount));
+        uint256 withdrawable = positionManager.collateralAmountWithdrawable(OWNER, address(mockUSDC));
+
+        console.log("WITHDRAWABLE: ", withdrawable);
+        positionManager.openPosition(address(mockUSDC), uint128(debtAmount));
+
+        uint256 withdrawable2 = positionManager.collateralAmountWithdrawable(OWNER, address(mockUSDC));
+
+        console.log("WITHDRAWABLE 2: ", withdrawable2);
+
+        // Even 1 wei above the calculated maximum must fail
+        vm.expectRevert(Errors.PM__UndercollateralizedPosition.selector);
+
+        positionManager.withdraw(address(mockUSDC), OWNER, uint128(withdrawable2 + 1));
+    }
 }

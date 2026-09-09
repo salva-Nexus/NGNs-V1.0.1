@@ -72,7 +72,8 @@ abstract contract Storage {
                 let packed := sload(pSlot)
                 let collateral := shr(0x80, packed)
                 if gt(collateralAmount, collateral) {
-                    revert(0x00, 0x00)
+                    mstore(0x00, 0xe8bb0bb9) // Insufficient Balance
+                    revert(0x00, 0x04)
                 }
                 let full :=
                     or(shl(0x80, sub(collateral, collateralAmount)), and(packed, 0xffffffffffffffffffffffffffffffff))

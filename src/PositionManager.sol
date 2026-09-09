@@ -49,25 +49,26 @@ contract PositionManager is Checkers, Events, Modifier {
         (, int256 price,,,) = priceFeed(priceFeedAddress);
         _checkCollateralReq(token, uint256(price), uint256(ratio), uint256(liqThreshold));
         _storeCollateralConfig(msg.sender, token, priceFeedAddress, ratio, liqThreshold);
-
         emit CollateralRegistered(msg.sender, token, priceFeedAddress);
     }
 
     function depositCollateral(address token, uint128 collateralAmount) external {
         _checkDepositAndMintReq(token, uint256(collateralAmount), address(0));
         _updateCollateralValue(msg.sender, token, uint128(collateralAmount), 1);
-        IERC20(token).safeTransferFrom(msg.sender, address(this), uint256(collateralAmount));
         emit CollateralDeposited(msg.sender, token, uint256(collateralAmount));
+        IERC20(token).safeTransferFrom(msg.sender, address(this), uint256(collateralAmount));
     }
 
     function openPosition(address token, uint128 ngnsAmount) external nonReentrant {
         (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
         _checkDepositAndMintReq(token, uint256(ngnsAmount), config.priceFeed);
         uint256 nValue = ngnValue(token, uint256(positions.collateralDeposited));
-        _validatePositionHealth(config, positions, token, nValue, uint256(ngnsAmount));
+        _validatePositionHealth(
+            nValue, uint256(ngnsAmount), uint256(positions.mintedNgns), uint256(config.customCollateralRatio)
+        );
         _updateDebtValue(msg.sender, token, ngnsAmount, 1);
-        IAdapter(adapter).supply(msg.sender, uint256(ngnsAmount));
         emit PositionOpened(msg.sender, token, uint256(ngnsAmount));
+        IAdapter(adapter).supply(msg.sender, uint256(ngnsAmount));
     }
 
     function settlePosition(address token, uint128 ngnsAmount) external {
@@ -95,8 +96,8 @@ contract PositionManager is Checkers, Events, Modifier {
         IAdapter(adapter).repay(msg.sender, uint256(amountToBurn));
         _updateDebtValue(user, token, uint128(amountToBurn), 0);
         _updateCollateralValue(user, token, uint128(totalSeized), 0);
-        IERC20(token).safeTransfer(receiver, totalSeized);
         emit Purged(user, token, msg.sender, receiver, amountToBurn, totalSeized, liqBonus);
+        IERC20(token).safeTransfer(receiver, totalSeized);
     }
 
     function updateCollateralConfig(address token, uint48 newRatio, uint48 newLiqThreshold) external {
@@ -114,5 +115,20 @@ contract PositionManager is Checkers, Events, Modifier {
         }
         _updateCollateralConfig(msg.sender, token, newRatio, newLiqThreshold);
         emit CollateralConfigUpdated(msg.sender, token, newRatio, newLiqThreshold);
+    }
+
+    function withdraw(address token, address receiver, uint128 amount) external {
+        (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
+        _checkWithdrawalReq(
+            token,
+            receiver,
+            uint256(positions.collateralDeposited),
+            uint256(positions.mintedNgns),
+            uint256(config.customCollateralRatio)
+        );
+        _updateCollateralValue(msg.sender, token, amount, 0);
+        _checkFinalWithdrawalReq(token, uint256(config.customCollateralRatio));
+        emit CollateralWithdrawn(msg.sender, token, receiver, amount);
+        IERC20(token).safeTransfer(receiver, uint256(amount));
     }
 }

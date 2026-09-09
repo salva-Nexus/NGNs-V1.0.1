@@ -87,19 +87,38 @@ abstract contract Checkers is Views {
         if (amount <= 0) revert PM__ZeroAmount();
     }
 
-    function _validatePositionHealth(
-        CollateralConfig memory config,
-        PositionConfig memory positions,
+    function _checkWithdrawalReq(
         address token,
-        uint256 collateralToNgnValue,
-        uint256 ngnsAmountToMint
+        address receiver,
+        uint256 collateralDeposited,
+        uint256 mintedNgns,
+        uint256 customCollateralRatio
     ) internal view {
-        uint256 healthFactor = userPositionHealth(msg.sender, token, ngnsAmountToMint);
-        if (healthFactor < config.customCollateralRatio) revert PM__UndercollateralizedPosition();
-        uint256 debt = positions.mintedNgns;
+        // not calling userPositionHealth here, to prevent double sload
+        uint256 nValue = ngnValue(token, uint256(collateralDeposited));
+        uint256 health = mintedNgns > 0 ? (nValue * BPS_DENOMINATOR) / uint256(mintedNgns) : type(uint256).max;
+        if (health < customCollateralRatio) revert PM__UndercollateralizedPosition();
+        if (receiver == address(0)) revert PM__InvalidAddress();
+    }
+
+    function _checkFinalWithdrawalReq(address token, uint256 customCollateralRatio) internal view {
+        uint256 health = userPositionHealth(msg.sender, token, 0);
+        if (health < customCollateralRatio) revert PM__UndercollateralizedPosition();
+    }
+
+    function _validatePositionHealth(
+        uint256 collateralToNgnValue,
+        uint256 ngnsAmountToMint,
+        uint256 mintedNgns,
+        uint256 customCollateralRatio
+    ) internal pure {
+        uint256 healthFactor =
+            (collateralToNgnValue * BPS_DENOMINATOR) / (uint256(mintedNgns) + ngnsAmountToMint);
+        if (healthFactor < customCollateralRatio) revert PM__UndercollateralizedPosition();
+        uint256 debt = mintedNgns;
         if (debt == 0) return;
 
-        uint256 maxBorrow = (collateralToNgnValue * BPS_DENOMINATOR) / config.customCollateralRatio;
+        uint256 maxBorrow = (collateralToNgnValue * BPS_DENOMINATOR) / customCollateralRatio;
         if (debt + ngnsAmountToMint > maxBorrow) revert PM__BreachesCollateralRatio();
     }
 }

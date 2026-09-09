@@ -49,7 +49,7 @@ abstract contract CollateralOracle is Storage, Errors {
             (10 ** ngnsDec * DECIMAL_SCALER) / ((usdPricePerNgn * 10 ** ngnsDec) / 10 ** ngnOracleDecimals);
         // TO GET THE USD VALUE OF THE AMOUNT
         uint256 usdValueOfNgnsAmount = (ngnsAmount * DECIMAL_SCALER * (DECIMAL_SCALER / 10 ** ngnsDec)) / ngnPricePerUsd;
-        uint256 tokenScale = 10 ** ngnsDec;
+        uint256 tokenScale = 10 ** _decimalOf(token);
         uint256 priceToTokenScale = (uint256(price) * DECIMAL_SCALER) / CHAINLINK_ANSWER_DECIMALS;
         cValue = (usdValueOfNgnsAmount * tokenScale) / priceToTokenScale;
         liqBonus = (cValue * LIQ_BONUS) / PERCENTAGE_SCALER;
