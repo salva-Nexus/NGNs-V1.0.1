@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 abstract contract Errors {
+    error PM__InvalidPrice();
     error PM__UnsupportedCollateral();
     error PM__UnregisteredCollateral();
     error PM__InvalidOracle();
@@ -23,4 +24,5 @@ abstract contract Errors {
     error PM__UndercollateralizedPosition();
     error PM__CannotModifyParametersWithActiveDebt();
     error PM__CanOnlyLiquidatePartially();
+    error PM__AmountTooSmall();
 }

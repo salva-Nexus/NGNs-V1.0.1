@@ -32,7 +32,7 @@ abstract contract Views is Storage, CollateralOracle {
     }
 
     function userPositionHealth(address user, address token, uint256 debtAmount) public view returns (uint256) {
-        (, PositionConfig memory positions) = userConfig(user, token);
+        PositionConfig memory positions = positionConfig(user, token);
         uint256 nValue = ngnValue(token, uint256(positions.collateralDeposited));
 
         return debtAmount == 0

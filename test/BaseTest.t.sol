@@ -24,7 +24,7 @@ abstract contract BaseTest is Test {
     MockUSDC internal mockUSDC;
     MockAggregatorV3 internal mockAggregatorV3ForWeth;
     MockAggregatorV3 internal mockAggregatorUsdcUsd;
-    uint256 internal usdPricePerNgn = 840; // 0.00084 USD per 1 NGN
+    uint256 internal usdPricePerNgn = 84000; // 0.00084 USD per 1 NGN
     uint256 internal wethToUsdPrice = 2000e8; // 2000 USD per 1 WETH
     uint256 internal INITIAL_USDC_USD_PRICE = 1e8;
     uint256 internal ethToDeal = 100 * 10 ** 18;

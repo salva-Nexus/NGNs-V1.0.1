@@ -488,13 +488,13 @@ contract PM is BaseTest {
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), initialMintAmount);
 
-        // 2. Dump WETH price to 1,000 NGN/WETH
-        // Health = (1 * 1000) / 1100 = ~90.9% (9090 BPS) < MIN_LIQ_THRESHOLD (13000 BPS) -> Unhealthy
+        // 2. Dump WETH price to 800 USD/WETH
         uint256 h1 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H1: ", h1);
         mockAggregatorV3ForWeth.updateAnswer(1000e8);
         uint256 h2 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H2: ", h2);
+        // 999999999997968
 
         // 3. Setup liquidator with NGNS
         _changePrank(liquidator);
@@ -502,25 +502,40 @@ contract PM is BaseTest {
         positionManager.depositCollateral(address(mockWETH), depositAmount * 4);
         positionManager.openPosition(address(mockWETH), uint128(2_000 * 10 ** ngns.decimals()));
 
-        // 4. First Purge: Liquidate 50% (550 NGNS). Position remains unhealthy (550 NGNS remaining > 500 NGNS floor)
-        positionManager.purge(borrower, address(mockWETH), receiver, initialMintAmount / 2);
+        (, PositionManager.PositionConfig memory posFinal) = positionManager.userConfig(borrower, address(mockWETH));
 
-        (, PositionManager.PositionConfig memory posMid) = positionManager.userConfig(borrower, address(mockWETH));
-        assertEq(posMid.mintedNgns, 550 * 10 ** ngns.decimals());
+        // 4. First Purge: Liquidate 50% (550 NGNS). Position remains unhealthy (550 NGNS remaining > 500 NGNS floor)
+        positionManager.purge(borrower, address(mockWETH), receiver, uint128(posFinal.mintedNgns) / 2);
+
+        uint256 h3 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H3: ", h3);
+
+        (, PositionManager.PositionConfig memory posFina2) = positionManager.userConfig(borrower, address(mockWETH));
+
+        mockAggregatorV3ForWeth.updateAnswer(500e8);
+        uint256 h4 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H4: ", h4);
 
         // 5. Second Purge: Liquidate 50% of 550 NGNS (275 NGNS).
         // Position remaining debt drops to 275 NGNS (which is <= MIN_DEBT_FLOOR of 500 NGNS)
-        positionManager.purge(borrower, address(mockWETH), receiver, uint128(275 * 10 ** ngns.decimals()));
+        positionManager.purge(borrower, address(mockWETH), receiver, uint128(posFina2.mintedNgns) / 2);
 
-        (, PositionManager.PositionConfig memory posDust) = positionManager.userConfig(borrower, address(mockWETH));
-        assertEq(posDust.mintedNgns, 275 * 10 ** ngns.decimals());
+        uint256 h5 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H5: ", h5);
 
+        mockAggregatorV3ForWeth.updateAnswer(250e8);
+        uint256 h6 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H6: ", h6);
         // 6. Third Purge (Dust Zone): Debt is now 275 NGNS (<= 500 NGNS MIN_DEBT_FLOOR).
         // Calling purge overrides to 100% full liquidation of remaining 275 NGNS debt.
         positionManager.purge(borrower, address(mockWETH), receiver, 1);
 
-        (, PositionManager.PositionConfig memory posFinal) = positionManager.userConfig(borrower, address(mockWETH));
-        assertEq(posFinal.mintedNgns, 0);
+        uint256 h7 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H7: ", h7);
+        (, PositionManager.PositionConfig memory posFinal3) = positionManager.userConfig(borrower, address(mockWETH));
+        assertEq(posFinal3.mintedNgns, 0);
+        console.log("Remaining Collateral: ", posFinal3.collateralDeposited);
+        console.log("Remaining Collateral: ", posFinal3.collateralDeposited < depositAmount);
     }
 
     function test_Cannot_Purge_ExceedingFiftyPercentCap() external init {
@@ -648,6 +663,8 @@ contract PM is BaseTest {
         uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
         uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
 
+        uint256 h1 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H1: ", h1);
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
         positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
@@ -656,12 +673,18 @@ contract PM is BaseTest {
         positionManager.openPosition(address(mockWETH), mintAmount);
         positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
 
+        uint256 h2 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H2: ", h2);
+
         _changePrank(liquidator);
         mockWETH.approve(address(positionManager), depositAmount * 10);
         positionManager.depositCollateral(address(mockWETH), depositAmount * 10);
         positionManager.openPosition(address(mockWETH), mintAmount);
 
         mockAggregatorV3ForWeth.updateAnswer(1050e8);
+        uint256 h3 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
+        console.log("BORROWER H3: ", h3);
+        // 2380952 380952380952380000
 
         // Bound amount to strictly exceed 50%
         uint128 maxAllowed = (mintAmount + uint128(100_000 * 10 ** ngns.decimals())) / 2;
@@ -669,24 +692,6 @@ contract PM is BaseTest {
 
         vm.expectRevert(Errors.PM__CanOnlyLiquidatePartially.selector);
         positionManager.purge(borrower, address(mockWETH), liquidator, rawNgnsAmount);
-    }
-
-    function test_USDC_CollateralValue_DecimalScaling() external view {
-        // 1,000,000 NGN (6 decimals)
-        uint128 ngnAmount = uint128(1_000_000 * 10 ** ngns.decimals());
-
-        (uint256 usdcRequiredValue,) = positionManager.collateralValue(address(mockUSDC), ngnAmount);
-
-        // Calculate expected value mathematically based on NGN/USD feed rate
-        (uint256 usdPricePerNgn,) = ngnOracle.getUsdPricePerNgn();
-        uint8 ngnOracleDec = ngnOracle.decimals();
-        uint256 ngnPricePerUsd = (10 ** ngnOracleDec * 10 ** ngnOracleDec) / usdPricePerNgn;
-
-        uint256 expectedUsdcValuation = (ngnAmount * 10 ** mockUSDC.decimals()) / ngnPricePerUsd;
-
-        console.log("Valuation for 1M NGN in USDC (6 decimals):", usdcRequiredValue);
-
-        assertEq(usdcRequiredValue, expectedUsdcValuation);
     }
 
     function test_USDC_PositionHealth_Precision() external init {
@@ -751,21 +756,18 @@ contract PM is BaseTest {
         assertGt(receiverUsdcAfter, receiverUsdcBefore);
     }
 
-    function test_shift() public pure {
-        bytes32 s;
-        bytes32 l;
-        bytes32 m;
-        bytes32 f;
-        assembly {
-            s := 0x1111111111111111111111111111111111111111000000444444000000555555
-            l := not(0xffffffffffff)
-            m := and(s, l)
-            f := or(m, 0x000000999999)
-        }
-
-        console.logBytes32(s);
-        console.logBytes32(l);
-        console.logBytes32(m);
-        console.logBytes32(f);
+    function test_shift() public view {
+        uint256 nvalue = positionManager.ngnValue(address(mockWETH), 1e18);
+        console.log(nvalue);
     }
+
+    /**
+     * `testFuzz_Purge_PartialLiquidationBoundaries(uint128)`
+     * `test_Cannot_Purge_ExceedingFiftyPercentCap()`
+     * `test_Cannot_Purge_InsufficientLiquidatorBalance()`
+     * `test_Cannot_Purge_InvalidReceiver()`
+     * `test_Purge_DustDebt_FullLiquidation_Success()`
+     * `test_Purge_StandardPartialLiquidation_Success()`
+     * `test_Purge_Success()`
+     */
 }

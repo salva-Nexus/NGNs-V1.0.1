@@ -10,8 +10,8 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 contract NGNOracle is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
     bytes32 public constant PRICE_UPDATE_ROLE = keccak256("PRICE_UPDATE_ROLE");
 
-    /// @notice Oracle answer precision (6 decimals)
-    uint8 public constant decimals = 6;
+    /// @notice Oracle answer precision (8 decimals)
+    uint8 public constant decimals = 8;
 
     struct PriceConfig {
         uint256 pricePerNgn;
@@ -32,7 +32,7 @@ contract NGNOracle is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
     }
 
     /// @notice Initializes the upgradeable contract state
-    /// @param initialPrice Scaled price value (e.g., 840 for 0.00084 USD at 6 decimals)
+    /// @param initialPrice Scaled price value (e.g., 84000 for 0.00084 USD at 8 decimals)
     function initialize(uint256 initialPrice) external initializer {
         __AccessControl_init();
 

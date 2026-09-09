@@ -86,8 +86,8 @@ contract PositionManager is Checkers, Events, Modifier {
             uint256(config.customLiqThreshold),
             uint256(positions.mintedNgns)
         );
-        (uint256 cValue, uint256 liqBonus) = collateralValue(token, ngnsAmount);
-        require(cValue > 0, "Amount too small");
+        (uint256 cValue, uint256 liqBonus) = collateralValue(token, amountToBurn);
+        if (cValue <= 0) revert PM__AmountTooSmall();
         uint256 totalSeized = cValue + liqBonus;
         if (totalSeized > positions.collateralDeposited) {
             totalSeized = positions.collateralDeposited;

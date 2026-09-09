@@ -13,6 +13,7 @@ abstract contract Storage {
     uint256 internal constant DECIMAL_SCALER = 10 ** 18;
     uint256 internal constant STALE_PRICE_THRESHOLD = 2 hours;
     uint256 internal constant PERCENTAGE_SCALER = 100;
+    uint256 internal constant CHAINLINK_ANSWER_DECIMALS = 10 ** 8;
 
     address internal immutable ngns;
     address internal immutable ngnPriceFeed;
