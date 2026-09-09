@@ -8,17 +8,20 @@ interface INGNS {
     function burn(address from, uint256 amount) external;
 }
 
+/// @title Position Adapter
+/// @notice Middleman contract regulating supply caps and PositionManager authorizations for NGNS minting/burning.
 contract Adapter is AccessControl {
     bytes32 public constant MANAGER_ADMIN_ROLE = keccak256("MANAGER_ADMIN_ROLE");
     uint256 public constant MANAGER_MINT_CAP = 1_000_000 * 10 ** 6;
+
     INGNS public immutable ngns;
 
     mapping(address positionManager => bool isAllowed) public isPositionManager;
 
     error Adapter__NotPositionManager();
     error Adapter__ZeroAddress();
-    error Adapter__MintAmountExceedsLimit(uint256, uint256);
-    error Adapter__NotAllowed();
+    error Adapter__MintAmountExceedsLimit(uint256 amount, uint256 cap);
+
     event PositionManagerStatusUpdated(address indexed manager, bool indexed status);
 
     modifier onlyPositionManager() {
@@ -27,9 +30,7 @@ contract Adapter is AccessControl {
     }
 
     constructor(address _ngns) {
-        if (_ngns == address(0)) {
-            revert Adapter__ZeroAddress();
-        }
+        if (_ngns == address(0)) revert Adapter__ZeroAddress();
 
         ngns = INGNS(_ngns);
 
@@ -38,7 +39,6 @@ contract Adapter is AccessControl {
     }
 
     function setPositionManager(address manager, bool status) external onlyRole(MANAGER_ADMIN_ROLE) {
-        if (!status) revert Adapter__NotAllowed();
         if (manager == address(0)) revert Adapter__ZeroAddress();
         isPositionManager[manager] = status;
         emit PositionManagerStatusUpdated(manager, status);
