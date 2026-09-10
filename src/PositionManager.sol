@@ -142,11 +142,11 @@ contract PositionManager is Checkers, Events, Modifier {
             totalSeized = positions.collateralDeposited;
         }
 
-        IAdapter(adapter).repay(msg.sender, uint256(amountToBurn));
         _updateDebtValue(user, token, uint128(amountToBurn), 0);
         _updateCollateralValue(user, token, uint128(totalSeized), 0);
 
         emit Purged(user, token, msg.sender, receiver, amountToBurn, totalSeized, liqBonus);
+        IAdapter(adapter).repay(msg.sender, uint256(amountToBurn));
         IERC20(token).safeTransfer(receiver, totalSeized);
     }
 
