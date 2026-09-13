@@ -12,7 +12,7 @@ interface INGNS {
 /// @notice Middleman contract regulating supply caps and PositionManager authorizations for NGNS minting/burning.
 contract Adapter is AccessControl {
     bytes32 public constant MANAGER_ADMIN_ROLE = keccak256("MANAGER_ADMIN_ROLE");
-    uint256 public constant MANAGER_MINT_CAP = 1_000_000 * 10 ** 6;
+    uint256 public constant MANAGER_MINT_CAP = 1_000_000 * 10 ** 18;
 
     INGNS public immutable ngns;
 

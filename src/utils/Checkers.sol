@@ -2,7 +2,6 @@
 pragma solidity ^0.8.30;
 
 import { Views } from "./Views.sol";
-import { console } from "forge-std/console.sol";
 
 abstract contract Checkers is Views {
     function _checkCollateralReq(address token, uint256 price, uint256 ratio, uint256 liqThreshold) internal view {

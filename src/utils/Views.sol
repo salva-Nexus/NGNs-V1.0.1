@@ -3,7 +3,6 @@ pragma solidity ^0.8.30;
 
 import { Storage } from "../utils/Storage.sol";
 import { CollateralOracle } from "@Oracles/CollateralOracle.sol";
-import { console } from "forge-std/console.sol";
 
 abstract contract Views is Storage, CollateralOracle {
     function collateralConfig(address user, address token) public view returns (CollateralConfig memory) {
@@ -50,7 +49,6 @@ abstract contract Views is Storage, CollateralOracle {
             (uint256(positions.mintedNgns) * uint256(config.customCollateralRatio)) / BPS_DENOMINATOR;
         if (nValueOfcValue <= lockedNValueOfCvalue) return 0;
         uint256 excessNgn = nValueOfcValue - lockedNValueOfCvalue;
-        console.log("excessNgn", excessNgn);
         (uint256 cValue,) = collateralValue(token, excessNgn);
         return cValue;
     }

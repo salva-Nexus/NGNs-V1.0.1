@@ -488,7 +488,7 @@ contract PM is BaseTest {
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), initialMintAmount);
 
-        // 2. Dump WETH price to 800 USD/WETH
+        // 2. Dump WETH price to 1000e8 USD/WETH
         uint256 h1 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H1: ", h1);
         mockAggregatorV3ForWeth.updateAnswer(1000e8);
@@ -512,7 +512,6 @@ contract PM is BaseTest {
 
         (, PositionManager.PositionConfig memory posFina2) = positionManager.userConfig(borrower, address(mockWETH));
 
-        mockAggregatorV3ForWeth.updateAnswer(500e8);
         uint256 h4 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H4: ", h4);
 
@@ -523,7 +522,6 @@ contract PM is BaseTest {
         uint256 h5 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H5: ", h5);
 
-        mockAggregatorV3ForWeth.updateAnswer(250e8);
         uint256 h6 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H6: ", h6);
         // 6. Third Purge (Dust Zone): Debt is now 275 NGNS (<= 500 NGNS MIN_DEBT_FLOOR).

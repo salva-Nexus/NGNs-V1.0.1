@@ -6,7 +6,6 @@ import { Storage } from "../utils/Storage.sol";
 import { INGNOracle } from "@INGNOracle/INGNOracle.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/AggregatorV3Interface.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { console } from "forge-std/console.sol";
 
 abstract contract CollateralOracle is Storage, Errors {
     function priceFeed(address pFeed)

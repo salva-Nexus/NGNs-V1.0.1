@@ -2,10 +2,12 @@
 pragma solidity ^0.8.30;
 
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
 /// @title NGNS Stablecoin
 /// @notice Synthetic NGN stablecoin minted and burned solely by the Adapter protocol engine.
-contract NGNS is ERC20 {
+/// @dev Implements EIP-2612 ERC20Permit for gasless approvals.
+contract NGNS is ERC20, ERC20Permit {
     address public adapter;
 
     error NGNS__NotAllowed();
@@ -14,15 +16,11 @@ contract NGNS is ERC20 {
 
     event AdapterSet(address indexed adapter);
 
-    constructor() ERC20("Salva's Nigerian Naira", "NGNS") { }
+    constructor() ERC20("Salva's Nigerian Naira", "NGNS") ERC20Permit("Salva's Nigerian Naira") { }
 
     modifier onlyAdapter() {
         _onlyAdapter();
         _;
-    }
-
-    function decimals() public pure override returns (uint8) {
-        return 6;
     }
 
     function setAdapter(address _adapter) external {
