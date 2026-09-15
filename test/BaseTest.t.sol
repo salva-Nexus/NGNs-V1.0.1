@@ -65,7 +65,9 @@ abstract contract BaseTest is Test {
         priceFeeds[0] = address(mockAggregatorV3ForWeth);
         priceFeeds[1] = address(mockAggregatorUsdcUsd);
 
-        positionManager = new PositionManager(address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds);
+        positionManager = new PositionManager(
+            address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds, 5_000_000 * 10 ** 18
+        );
         adapter.setPositionManager(address(positionManager), true);
         console.log(unicode"WETH TOKEN ✅                  =>                  ", address(mockWETH));
         console.log(unicode"WETH PRICE FEED ✅             =>                  ", address(mockAggregatorV3ForWeth));

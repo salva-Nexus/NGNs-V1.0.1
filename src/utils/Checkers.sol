@@ -84,6 +84,9 @@ abstract contract Checkers is Views {
             }
         }
         if (amount <= 0) revert PM__ZeroAmount();
+        if (amount > MINT_CAP) {
+            revert PM__MintAmountExceedsLimit(amount, MINT_CAP);
+        }
     }
 
     function _checkWithdrawalReq(

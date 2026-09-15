@@ -25,4 +25,5 @@ abstract contract Errors {
     error PM__CannotModifyParametersWithActiveDebt();
     error PM__CanOnlyLiquidatePartially();
     error PM__AmountTooSmall();
+    error PM__MintAmountExceedsLimit(uint256 amount, uint256 cap);
 }

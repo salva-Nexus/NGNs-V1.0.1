@@ -18,6 +18,7 @@ abstract contract Storage {
     address internal immutable ngns;
     address internal immutable ngnPriceFeed;
     address internal immutable adapter;
+    uint256 public immutable MINT_CAP;
 
     struct CollateralConfig {
         address priceFeed;

@@ -9,12 +9,11 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { Script, console } from "forge-std/Script.sol";
 
 contract DeploySalvaCore is Script {
-    // Default initial parameters matching your test config
-    uint256 internal usdPricePerNgn = 84000; // 0.00084 USD per 1 NGN
-
     function run() external returns (NGNS ngns, Adapter adapter, NGNOracle ngnOracle, PositionManager positionManager) {
         address usdcToken = address(0x036CbD53842c5426634e7929541eC2318f3dCF7e); // BASE SEP
         address usdcPriceFeed = address(0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165); // BASE SEP
+        uint256 mintCap = 5_000_000 * 10 ** 18;
+        uint256 usdPricePerNgn = 84000;
 
         console.log("==================================================");
         console.log("               NGNS CORE DEPLOYMENT               ");
@@ -49,7 +48,8 @@ contract DeploySalvaCore is Script {
         priceFeeds[0] = usdcPriceFeed;
 
         // 6. Deploy PositionManager
-        positionManager = new PositionManager(address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds);
+        positionManager =
+            new PositionManager(address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds, mintCap);
         console.log("PositionManager  :", address(positionManager));
 
         // 7. Authorize PositionManager inside Adapter

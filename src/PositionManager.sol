@@ -21,11 +21,13 @@ contract PositionManager is Checkers, Events, Modifier {
         address _ngnPriceFeed,
         address _adapter,
         address[] memory token,
-        address[] memory priceFeedAddress
+        address[] memory priceFeedAddress,
+        uint256 _maxCap
     ) {
         ngns = _ngns;
         ngnPriceFeed = _ngnPriceFeed;
         adapter = _adapter;
+        MINT_CAP = _maxCap;
 
         if (token.length != priceFeedAddress.length) revert PM__InvalidTokenToFeedLength();
         _whitelistCollateralToken(token, priceFeedAddress);
