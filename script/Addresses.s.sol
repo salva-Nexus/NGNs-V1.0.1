@@ -88,7 +88,7 @@ abstract contract Addresses {
     }
 
     function _getAdapter() internal view returns (address) {
-        uint256 chainId = block.chainid;
+        uint256 chainId = block.chainid;//
         if (chainId == BASE_MAINNET) return address(0x001);
         if (chainId == BASE_SEPOLIA) return address(0x5d968c81c73ffD1D20F67E9550a6e25a022529BF);
         if (chainId == BNB_MAINNET) return address(0x001);
