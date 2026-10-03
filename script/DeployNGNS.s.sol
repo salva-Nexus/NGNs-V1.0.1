@@ -5,15 +5,14 @@ import { Adapter } from "../src/Adapter.sol";
 import { NGNS } from "../src/NGNS.sol";
 import { PositionManager } from "../src/PositionManager.sol";
 import { NGNOracle } from "../src/oracles/NGNOracle.sol";
+import { Addresses } from "./Addresses.s.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { Script, console } from "forge-std/Script.sol";
 
-contract DeploySalvaCore is Script {
+contract DeployNGNS is Script, Addresses {
     function run() external returns (NGNS ngns, Adapter adapter, NGNOracle ngnOracle, PositionManager positionManager) {
-        address usdcToken = address(0x036CbD53842c5426634e7929541eC2318f3dCF7e); // BASE SEP
-        address usdcPriceFeed = address(0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165); // BASE SEP
         uint256 mintCap = 5_000_000 * 10 ** 18;
-        uint256 usdPricePerNgn = 84000;
+        uint256 usdPricePerNgn = 840000000000000;
 
         console.log("==================================================");
         console.log("               NGNS CORE DEPLOYMENT               ");
@@ -27,10 +26,15 @@ contract DeploySalvaCore is Script {
         ERC1967Proxy oracleProxy = new ERC1967Proxy(address(oracleImpl), oracleInitData);
         ngnOracle = NGNOracle(address(oracleProxy));
         console.log("NGN Oracle Proxy :", address(ngnOracle));
-
+        ngnOracle.grantRole(ngnOracle.PRICE_UPDATE_ROLE(), address(0xfD5A9828bac27495FAb7F6174b3de386E0554187));
+        ngnOracle.updatePrice(usdPricePerNgn);
+        ngnOracle.setTokenUsdFeed(address(0), address(0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1)); // ETH/USD
+        ngnOracle.setTokenUsdFeed(
+            address(0x42cb35c315665b62b4A6970C7c6030243B808111), address(0x3ec8593F930EA45ea58c968260e6e9FF53FC934f)
+        ); // USDT/USD
         // 2. Deploy NGNS Token
         ngns = new NGNS();
-        console.log("NGNS Token       :", address(ngns));
+        console.log("NGNS Token       :", address(ngns), block.chainid);
 
         // 3. Deploy Adapter
         adapter = new Adapter(address(ngns));
@@ -40,16 +44,10 @@ contract DeploySalvaCore is Script {
         ngns.setAdapter(address(adapter));
         console.log(unicode"Adapter Linked to NGNS ✅");
 
-        // 5. Build Token & Price Feed Arrays for PositionManager
-        address[] memory tokens = new address[](1);
-        tokens[0] = usdcToken;
-
-        address[] memory priceFeeds = new address[](1);
-        priceFeeds[0] = usdcPriceFeed;
-
         // 6. Deploy PositionManager
-        positionManager =
-            new PositionManager(address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds, mintCap);
+        positionManager = new PositionManager(
+            address(ngns), address(ngnOracle), address(adapter), _getTokens(), _getPriceFeeds(), mintCap
+        );
         console.log("PositionManager  :", address(positionManager));
 
         // 7. Authorize PositionManager inside Adapter
@@ -63,3 +61,4 @@ contract DeploySalvaCore is Script {
         console.log("==================================================");
     }
 }
+

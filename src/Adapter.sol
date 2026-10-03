@@ -8,15 +8,10 @@ interface INGNS {
     function burn(address from, uint256 amount) external;
 }
 
-/// @title Position Adapter
-/// @notice Middleman contract regulating supply caps and PositionManager authorizations for NGNS minting/burning.
 contract Adapter is AccessControl {
     bytes32 public constant MANAGER_ADMIN_ROLE = keccak256("MANAGER_ADMIN_ROLE");
-
     INGNS public immutable ngns;
-
     mapping(address positionManager => bool isAllowed) public isPositionManager;
-
     error Adapter__NotPositionManager();
     error Adapter__ZeroAddress();
 

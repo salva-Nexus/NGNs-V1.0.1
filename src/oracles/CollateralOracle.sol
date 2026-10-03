@@ -19,7 +19,7 @@ abstract contract CollateralOracle is Storage, Errors {
 
     function ngnValue(address token, uint256 collateralAmount) public view returns (uint256 nValue) {
         // GET PRICE OF 1 COLLATERAL IN USD - eg 1WETH = $2000 => 200000000000
-        int256 price = _stalenessCheckChainlink(token);
+        (int256 price, uint8 decimals) = _stalenessCheckChainlink(token);
         uint256 usdPricePerNgn = _stalenessCheckNgn();
         // GET NGN ORACLE DECIMALS => 6
         uint8 ngnOracleDecimals = INGNOracle(ngnPriceFeed).decimals();
@@ -28,8 +28,8 @@ abstract contract CollateralOracle is Storage, Errors {
         uint256 ngnPricePerUsd =
             (10 ** ngnsDec * DECIMAL_SCALER) / ((usdPricePerNgn * 10 ** ngnsDec) / 10 ** ngnOracleDecimals);
         // TO GET THE USD PRICE OF THE INPUTTED COLLATERAL AMOUNT
-        uint256 collaterAmountToUsd = (collateralAmount * uint256(price) * DECIMAL_SCALER)
-            / (CHAINLINK_ANSWER_DECIMALS * 10 ** _decimalOf(token));
+        uint256 collaterAmountToUsd =
+            (collateralAmount * uint256(price) * DECIMAL_SCALER) / (10 ** decimals * 10 ** _decimalOf(token));
         // NOW DERIVE THE NGN VALUE OF THE COLLATERAL USD VALUE
         uint256 collaterAmountToNgn = (collaterAmountToUsd * ngnPricePerUsd) / DECIMAL_SCALER;
         // NOW GET THE ABSOLUTE VALUE SCALED TO THE DECIMALS OF NGNS CONTRACT
@@ -38,7 +38,7 @@ abstract contract CollateralOracle is Storage, Errors {
 
     function collateralValue(address token, uint256 ngnsAmount) public view returns (uint256 cValue, uint256 liqBonus) {
         // GET PRICE OF 1 NGN IN USD - eg 1NGN = 0.00084 USD => 840
-        int256 price = _stalenessCheckChainlink(token);
+        (int256 price, uint8 decimals) = _stalenessCheckChainlink(token);
         uint256 usdPricePerNgn = _stalenessCheckNgn();
         // GET NGN ORACLE DECIMALS => 6
         uint8 ngnOracleDecimals = INGNOracle(ngnPriceFeed).decimals();
@@ -49,7 +49,7 @@ abstract contract CollateralOracle is Storage, Errors {
         // TO GET THE USD VALUE OF THE AMOUNT
         uint256 usdValueOfNgnsAmount = (ngnsAmount * DECIMAL_SCALER * (DECIMAL_SCALER / 10 ** ngnsDec)) / ngnPricePerUsd;
         uint256 tokenScale = 10 ** _decimalOf(token);
-        uint256 priceToTokenScale = (uint256(price) * DECIMAL_SCALER) / CHAINLINK_ANSWER_DECIMALS;
+        uint256 priceToTokenScale = (uint256(price) * DECIMAL_SCALER) / 10 ** decimals;
         cValue = (usdValueOfNgnsAmount * tokenScale) / priceToTokenScale;
         liqBonus = (cValue * LIQ_BONUS) / PERCENTAGE_SCALER;
     }
@@ -63,8 +63,9 @@ abstract contract CollateralOracle is Storage, Errors {
         return usdPricePerNgn;
     }
 
-    function _stalenessCheckChainlink(address token) internal view returns (int256) {
+    function _stalenessCheckChainlink(address token) internal view returns (int256, uint8) {
         address pFeed = allowedCollateralFeeds[token];
+        uint8 decimals = AggregatorV3Interface(pFeed).decimals();
         // GET PRICE OF 1 COLLATERAL IN USD - eg 1WETH = $2000 => 200000000000
         (uint80 roundId, int256 price,, uint256 updatedAt, uint80 answeredInRound) = priceFeed(pFeed);
         if (block.timestamp - updatedAt > STALE_PRICE_THRESHOLD) {
@@ -77,7 +78,7 @@ abstract contract CollateralOracle is Storage, Errors {
             revert PM__InvalidRound();
         }
         if (uint256(price) <= 0) revert PM__InvalidPrice();
-        return price;
+        return (price, decimals);
     }
 
     function _decimalOf(address token) internal view returns (uint8) {
