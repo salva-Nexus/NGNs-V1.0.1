@@ -50,45 +50,39 @@ contract PositionManager is Checkers, Events, Modifier {
         }
     }
 
-    function registerCollateral(address token, uint48 ratio, uint48 liqThreshold) public {
+    function registerCollateral(address token, uint96 ratio) public {
         address priceFeedAddress = allowedCollateralFeeds[token];
         if (priceFeedAddress == address(0)) revert PM__TokenNotWhitelisted();
 
         (, int256 price,,,) = priceFeed(priceFeedAddress);
-        _checkCollateralReq(token, uint256(price), uint256(ratio), uint256(liqThreshold));
-        _storeCollateralConfig(msg.sender, token, priceFeedAddress, ratio, liqThreshold);
+        _checkCollateralReq(token, uint256(price), uint256(ratio));
+        _storeCollateralConfig(msg.sender, token, priceFeedAddress, ratio);
         emit CollateralRegistered(msg.sender, token, priceFeedAddress);
     }
 
-    function updateCollateralConfig(address token, uint48 newRatio, uint48 newLiqThreshold) external {
-        (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
-        bool verified = _checkUpdateReq(
-            token,
-            uint256(newRatio),
-            uint256(newLiqThreshold),
-            uint256(config.customCollateralRatio),
-            positions.mintedNgns > 0
-        );
+    function updateCollateralConfig(address token, uint96 newRatio) external {
+        PositionConfig memory positions = positionConfig(msg.sender, token);
+        bool verified = _checkUpdateReq(token, newRatio, positions.mintedNgns > 0);
         if (!verified) {
-            registerCollateral(token, newRatio, newLiqThreshold);
+            registerCollateral(token, newRatio);
             return;
         }
-        _updateCollateralConfig(msg.sender, token, newRatio, newLiqThreshold);
-        emit CollateralConfigUpdated(msg.sender, token, newRatio, newLiqThreshold);
+        _updateCollateralConfig(msg.sender, token, newRatio);
+        emit CollateralConfigUpdated(msg.sender, token, uint256(newRatio));
     }
 
     /* ========================================================================================= */
     /*                                       CORE POSITION LOGIC                                 */
     /* ========================================================================================= */
 
-    function depositCollateral(address token, uint128 collateralAmount) public nonReentrant {
+    function depositCollateral(address token, uint128 collateralAmount) public {
         _checkDepositAndMintReq(token, uint256(collateralAmount), address(0));
         _updateCollateralValue(msg.sender, token, uint128(collateralAmount), 1);
         emit CollateralDeposited(msg.sender, token, uint256(collateralAmount));
         IERC20(token).safeTransferFrom(msg.sender, address(this), uint256(collateralAmount));
     }
 
-    function openPosition(address token, uint128 ngnsAmount) public nonReentrant {
+    function openPosition(address token, uint128 ngnsAmount) public {
         (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
         _checkDepositAndMintReq(token, uint256(ngnsAmount), config.priceFeed);
         uint256 nValue = ngnValue(token, uint256(positions.collateralDeposited));
@@ -100,13 +94,13 @@ contract PositionManager is Checkers, Events, Modifier {
         IAdapter(adapter).supply(msg.sender, uint256(ngnsAmount));
     }
 
-    function settlePosition(address token, uint128 ngnsAmount) public nonReentrant {
+    function settlePosition(address token, uint128 ngnsAmount) public {
         _updateDebtValue(msg.sender, token, ngnsAmount, 0);
         IAdapter(adapter).repay(msg.sender, ngnsAmount);
         emit DebtSettled(msg.sender, token, ngnsAmount);
     }
 
-    function withdraw(address token, address receiver, uint128 amount) public nonReentrant {
+    function withdraw(address token, address receiver, uint128 amount) public {
         (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
         _checkWithdrawalReq(
             token,
@@ -125,16 +119,9 @@ contract PositionManager is Checkers, Events, Modifier {
     /*                                      LIQUIDATION & PURGING                                */
     /* ========================================================================================= */
 
-    function purge(address user, address token, address receiver, uint128 ngnsAmount) external nonReentrant {
-        (CollateralConfig memory config, PositionConfig memory positions) = userConfig(user, token);
-        uint256 amountToBurn = _checkPurgeReq(
-            user,
-            receiver,
-            token,
-            uint256(ngnsAmount),
-            uint256(config.customLiqThreshold),
-            uint256(positions.mintedNgns)
-        );
+    function purge(address user, address token, address receiver, uint128 ngnsAmount) external {
+        PositionConfig memory positions = positionConfig(user, token);
+        uint256 amountToBurn = _checkPurgeReq(user, receiver, token, uint256(ngnsAmount), uint256(positions.mintedNgns));
         (uint256 cValue, uint256 liqBonus) = collateralValue(token, amountToBurn);
         if (cValue == 0) revert PM__AmountTooSmall();
 

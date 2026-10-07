@@ -74,7 +74,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0x001);
         if (chainId == BASE_SEPOLIA) return address(0x4e6A3bfa5c54f5b79274C73c8128d1f1c3651321);
         if (chainId == BNB_MAINNET) return address(0x001);
-        if (chainId == BNB_TESTNET) return address(0x87f383B0a8966Fb74882b70E8CDa3523192C4B7f);
+        if (chainId == BNB_TESTNET) return address(0x4A9D58566A5F778e090c78258f0C54189a1095Ae);
         revert("Addresses: Unsupported Chain ID");
     }
 
@@ -83,7 +83,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0x001);
         if (chainId == BASE_SEPOLIA) return address(0x6b51afD271bB46C8Ff068beAa511Fee5756Fcc66);
         if (chainId == BNB_MAINNET) return address(0x001);
-        if (chainId == BNB_TESTNET) return address(0x9066888C32Fa7807C796c183E868ADb3A27Aa6CF);
+        if (chainId == BNB_TESTNET) return address(0x3Ad5c68BF82bB402F81379124DCf513015CAafF1);
         revert("Addresses: Unsupported Chain ID");
     }
 
@@ -92,7 +92,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0x001);
         if (chainId == BASE_SEPOLIA) return address(0x5d968c81c73ffD1D20F67E9550a6e25a022529BF);
         if (chainId == BNB_MAINNET) return address(0x001);
-        if (chainId == BNB_TESTNET) return address(0xd840ba3AA8AA6e14238A6A7B52ABB94524c9f33C);
+        if (chainId == BNB_TESTNET) return address(0xF143e7BCf336d4bAcc15531A561b6f5476807934);
         revert("Addresses: Unsupported Chain ID");
     }
 
@@ -101,7 +101,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0x001);
         if (chainId == BASE_SEPOLIA) return address(0xd80877b6d1965511c011c7cEF7555260299f0c62);
         if (chainId == BNB_MAINNET) return address(0x001);
-        if (chainId == BNB_TESTNET) return address(0x989823a2D4F41230ADEF80A6618Fc60Eae6d7cF4);
+        if (chainId == BNB_TESTNET) return address(0x75C95a8421A7d07fb9f56D2F833f404A835b70c3);
         revert("Addresses: Unsupported Chain ID");
     }
 }

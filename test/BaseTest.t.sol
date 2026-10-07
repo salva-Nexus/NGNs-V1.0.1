@@ -29,7 +29,7 @@ abstract contract BaseTest is Test {
     uint256 internal INITIAL_USDC_USD_PRICE = 1e8;
     uint256 internal ethToDeal = 100 * 10 ** 18;
     uint256 internal wethToMint = 50 * 10 ** 18;
-    uint48 internal constant BPS_SCALER = 100;
+    uint96 internal constant BPS_SCALER = 100;
 
     function setUp() external {
         OWNER = makeAddr("OWNER");
@@ -80,17 +80,14 @@ abstract contract BaseTest is Test {
     }
 
     modifier init() {
-        uint48 plainRatio = 160;
-        uint48 scaledToBps = plainRatio * BPS_SCALER;
-        uint48 plainThreshold = 130;
-        uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
+        uint96 plainRatio = 160;
+        uint96 scaledToBps = plainRatio * BPS_SCALER;
         _changePrank(OWNER);
-        positionManager.registerCollateral(address(mockUSDC), 150 * BPS_SCALER, thresholdScaledToBps);
-        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        positionManager.registerCollateral(address(mockUSDC), 150 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), scaledToBps);
         PositionManager.CollateralConfig memory config = positionManager.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
         assertEq(config.customCollateralRatio, scaledToBps);
-        assertEq(config.customLiqThreshold, thresholdScaledToBps);
         _;
         _stopPrank();
     }

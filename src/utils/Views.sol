@@ -7,8 +7,8 @@ import { CollateralOracle } from "@Oracles/CollateralOracle.sol";
 abstract contract Views is Storage, CollateralOracle {
     function collateralConfig(address user, address token) public view returns (CollateralConfig memory) {
         bytes32 slot = _positionSlot(user, token);
-        (address feed, uint48 ratio, uint48 liqThreshold) = _loadCollateralConfig(slot);
-        return CollateralConfig({ priceFeed: feed, customCollateralRatio: ratio, customLiqThreshold: liqThreshold });
+        (address feed, uint96 ratio) = _loadCollateralConfig(slot);
+        return CollateralConfig({ priceFeed: feed, customCollateralRatio: ratio });
     }
 
     function positionConfig(address user, address token) public view returns (PositionConfig memory) {
@@ -23,10 +23,10 @@ abstract contract Views is Storage, CollateralOracle {
         returns (CollateralConfig memory, PositionConfig memory)
     {
         bytes32 slot = _positionSlot(user, token);
-        (address feed, uint48 ratio, uint48 liqThreshold) = _loadCollateralConfig(slot);
+        (address feed, uint96 ratio) = _loadCollateralConfig(slot);
         (uint128 totalCollateralDeposited, uint128 totalNgnsDebt) = _loadPositionsConfig(slot);
         return (
-            CollateralConfig({ priceFeed: feed, customCollateralRatio: ratio, customLiqThreshold: liqThreshold }),
+            CollateralConfig({ priceFeed: feed, customCollateralRatio: ratio }),
             PositionConfig({ collateralDeposited: totalCollateralDeposited, mintedNgns: totalNgnsDebt })
         );
     }

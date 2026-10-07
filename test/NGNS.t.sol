@@ -40,7 +40,7 @@ contract NGNSTest is BaseTest {
     function test_GetAssetPricePerNgn_WETH() public {
         vm.prank(OWNER);
         ngnOracle.setTokenUsdFeed(address(mockWETH), address(mockAggregatorV3ForWeth));
-        uint256 wethPerNgn = ngnOracle.getAssetPricePerNgn(address(mockWETH));
+        (uint256 wethPerNgn,) = ngnOracle.getAssetPricePerNgn(address(mockWETH));
         uint256 expectedWethPerNgn = 420_000_000_000;
         assertEq(wethPerNgn, expectedWethPerNgn);
         console.log(unicode"NGN/WETH Oracle Price ✅ =>", wethPerNgn);

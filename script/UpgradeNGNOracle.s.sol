@@ -7,14 +7,12 @@ import { Script, console } from "forge-std/Script.sol";
 
 contract UpgradeNGNOracle is Script, Addresses {
     function run() external {
-        uint256 usdPricePerNgn = 840000000000000;
         vm.startBroadcast();
         address proxyAddress = _getNgnOracle();
         console.log(unicode"Targeting NGNOracle Proxy at:", proxyAddress);
         NGNOracle newImplementation = new NGNOracle();
         console.log(unicode"New NGNOracle Implementation deployed at:", address(newImplementation));
         NGNOracle(proxyAddress).upgradeToAndCall(address(newImplementation), "");
-        NGNOracle(proxyAddress).updatePrice(usdPricePerNgn);
         console.log(unicode"✅ NGNOracle successfully upgraded to new implementation!");
         vm.stopBroadcast();
     }

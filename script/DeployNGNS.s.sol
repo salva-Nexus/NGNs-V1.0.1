@@ -28,9 +28,9 @@ contract DeployNGNS is Script, Addresses {
         console.log("NGN Oracle Proxy :", address(ngnOracle));
         ngnOracle.grantRole(ngnOracle.PRICE_UPDATE_ROLE(), address(0xfD5A9828bac27495FAb7F6174b3de386E0554187));
         ngnOracle.updatePrice(usdPricePerNgn);
-        ngnOracle.setTokenUsdFeed(address(0), address(0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1)); // ETH/USD
+        ngnOracle.setTokenUsdFeed(address(0), address(0x143db3CEEfbdfe5631aDD3E50f7614B6ba708BA7)); // ETH/USD
         ngnOracle.setTokenUsdFeed(
-            address(0x42cb35c315665b62b4A6970C7c6030243B808111), address(0x3ec8593F930EA45ea58c968260e6e9FF53FC934f)
+            address(0xb07B89CF7495306D418131123b04a9A616616228), address(0xEca2605f0BCF2BA5966372C99837b1F182d3D620)
         ); // USDT/USD
         // 2. Deploy NGNS Token
         ngns = new NGNS();

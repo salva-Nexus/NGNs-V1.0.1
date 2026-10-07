@@ -21,8 +21,7 @@ abstract contract Storage {
 
     struct CollateralConfig {
         address priceFeed;
-        uint48 customCollateralRatio;
-        uint48 customLiqThreshold;
+        uint96 customCollateralRatio;
     }
 
     struct PositionConfig {
@@ -106,64 +105,32 @@ abstract contract Storage {
         }
     }
 
-    function _loadCollateralConfig(bytes32 slot)
-        internal
-        view
-        returns (address priceFeed, uint48 ratio, uint48 liqThreshold)
-    {
-        assembly ("memory-safe") {
-            let packed := sload(slot)
-            priceFeed := shr(0x60, and(packed, not(0xffffffffffffffffffffffff)))
-            ratio := and(shr(0x30, packed), 0xffffffffffff)
-            liqThreshold := and(packed, 0xffffffffffff)
-        }
-    }
-
-    function _updateCollateralConfig(address user, address token, uint48 ratio, uint48 liqThreshold) internal {
-        bytes32 slot = _positionSlot(user, token);
+    function _loadCollateralConfig(bytes32 slot) internal view returns (address priceFeed, uint96 ratio) {
         assembly ("memory-safe") {
             let packed := sload(slot)
 
-            // Case 1: Update BOTH if both are > 0
-            if and(gt(ratio, 0x00), gt(liqThreshold, 0x00)) {
-                let f :=
-                    or(
-                        or(shl(0x30, ratio), and(liqThreshold, 0xffffffffffff)),
-                        and(packed, not(0xffffffffffffffffffffffff))
-                    )
-                sstore(slot, f)
-            }
-
-            // Case 2: Update ONLY ratio (if ratio > 0 and liqThreshold == 0)
-            if and(gt(ratio, 0x00), iszero(gt(liqThreshold, 0x00))) {
-                let r := shl(0x30, ratio)
-                let mask := 0xffffffffffffffffffffffffffffffffffffffff000000000000ffffffffffff
-                let p := and(packed, mask)
-                let f := or(p, r)
-                sstore(slot, f)
-            }
-
-            // Case 3: Update ONLY liqThreshold (if liqThreshold > 0 and ratio == 0)
-            if and(gt(liqThreshold, 0x00), iszero(gt(ratio, 0x00))) {
-                let mask := not(0xffffffffffff)
-                let p := and(packed, mask)
-                let f := or(p, and(liqThreshold, 0xffffffffffff))
-                sstore(slot, f)
-            }
+            priceFeed := shr(0x60, packed)
+            ratio := and(packed, 0xffffffffffffffffffffffff)
         }
     }
 
-    function _storeCollateralConfig(
-        address user,
-        address token,
-        address priceFeedAddress,
-        uint48 ratio,
-        uint48 liqThreshold
-    ) internal {
+    function _updateCollateralConfig(address user, address token, uint96 ratio) internal {
         bytes32 slot = _positionSlot(user, token);
+
         assembly ("memory-safe") {
-            let f := or(or(shl(0x60, priceFeedAddress), shl(0x30, ratio)), liqThreshold)
-            sstore(slot, f)
+            let packed := sload(slot)
+            let full := or(and(packed, not(0xffffffffffffffffffffffff)), ratio)
+            sstore(slot, full)
+        }
+    }
+
+    function _storeCollateralConfig(address user, address token, address priceFeedAddress, uint96 ratio) internal {
+        bytes32 slot = _positionSlot(user, token);
+
+        assembly ("memory-safe") {
+            let packed := or(shl(0x60, priceFeedAddress), ratio)
+
+            sstore(slot, packed)
         }
     }
 }

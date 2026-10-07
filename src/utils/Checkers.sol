@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import { Views } from "./Views.sol";
 
 abstract contract Checkers is Views {
-    function _checkCollateralReq(address token, uint256 price, uint256 ratio, uint256 liqThreshold) internal view {
+    function _checkCollateralReq(address token, uint256 price, uint256 ratio) internal view {
         if (isRegisteredCollateral(msg.sender, token)) {
             revert PM__CollateralLive();
         }
@@ -14,19 +14,9 @@ abstract contract Checkers is Views {
         if (ratio < MIN_COLLATERAL_RATIO) {
             revert PM__InvalidCollateralRatio();
         }
-
-        if (liqThreshold < MIN_LIQ_THRESHOLD) {
-            revert PM__InvalidLiqThreshold();
-        }
-
-        if (liqThreshold >= ratio) revert PM__InvalidThresholdBuffer();
     }
 
-    function _checkUpdateReq(address token, uint256 newRatio, uint256 newLiqThreshold, uint256 cRatio, bool isInDebt)
-        internal
-        view
-        returns (bool)
-    {
+    function _checkUpdateReq(address token, uint256 newRatio, bool isInDebt) internal view returns (bool) {
         if (!isRegisteredCollateral(msg.sender, token)) return false;
 
         if (isInDebt) revert PM__CannotModifyParametersWithActiveDebt();
@@ -36,25 +26,16 @@ abstract contract Checkers is Views {
                 revert PM__InvalidCollateralRatio();
             }
         }
-
-        if (newLiqThreshold > 0) {
-            if (newLiqThreshold < MIN_LIQ_THRESHOLD) revert PM__InvalidLiqThreshold();
-            if (newRatio > 0 && newLiqThreshold >= newRatio) revert PM__InvalidThresholdBuffer();
-            if (newRatio == 0 && newLiqThreshold >= cRatio) revert PM__InvalidThresholdBuffer();
-        }
         return true;
     }
 
-    function _checkPurgeReq(
-        address user,
-        address receiver,
-        address token,
-        uint256 ngnsAmount,
-        uint256 customLiqThreshold,
-        uint256 currentDebt
-    ) internal view returns (uint256) {
+    function _checkPurgeReq(address user, address receiver, address token, uint256 ngnsAmount, uint256 currentDebt)
+        internal
+        view
+        returns (uint256)
+    {
         uint256 healthBps = userPositionHealth(user, token, 0);
-        if (healthBps > customLiqThreshold || healthBps > MIN_LIQ_THRESHOLD) revert PM__NotAllowed();
+        if (healthBps > MIN_LIQ_THRESHOLD) revert PM__NotAllowed();
         if (msg.sender == user) revert PM__NotAllowed();
         if (currentDebt > MIN_DEBT_FLOOR) {
             if (ngnsAmount > currentDebt / 2) revert PM__CanOnlyLiquidatePartially();

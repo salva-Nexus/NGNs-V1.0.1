@@ -8,41 +8,27 @@ import { console } from "forge-std/console.sol";
 
 contract PM is BaseTest {
     function test_register_collateral() external {
-        uint48 plainRatio = 150;
-        uint48 scaledToBps = plainRatio * BPS_SCALER;
-        uint48 plainThreshold = 130;
-        uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
+        uint96 plainRatio = 150;
+        uint96 scaledToBps = plainRatio * BPS_SCALER;
         _changePrank(OWNER);
-        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        positionManager.registerCollateral(address(mockWETH), scaledToBps);
         PositionManager.CollateralConfig memory config = positionManager.collateralConfig(OWNER, address(mockWETH));
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
         assertEq(config.customCollateralRatio, scaledToBps);
-        assertEq(config.customLiqThreshold, thresholdScaledToBps);
 
-        _test_cannotRegisterSameCollateral(scaledToBps, thresholdScaledToBps);
+        _test_cannotRegisterSameCollateral(scaledToBps);
     }
 
-    function _test_cannotRegisterSameCollateral(uint48 scaledToBps, uint48 thresholdScaledToBps) internal {
+    function _test_cannotRegisterSameCollateral(uint96 scaledToBps) internal {
         vm.expectRevert(Errors.PM__CollateralLive.selector);
-        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        positionManager.registerCollateral(address(mockWETH), scaledToBps);
     }
 
     function test_cannotRegisterMinCollateralRatio() external {
-        uint48 plainThreshold = 130;
-        uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
         _changePrank(OWNER);
-        for (uint48 ratio = 0; ratio < 150; ratio++) {
+        for (uint96 ratio = 0; ratio < 150; ratio++) {
             vm.expectRevert(Errors.PM__InvalidCollateralRatio.selector);
-            positionManager.registerCollateral(address(mockWETH), ratio * BPS_SCALER, thresholdScaledToBps);
-        }
-        uint48 ratioScaled = 160 * BPS_SCALER;
-        _test_cannotRegisterMinThreshold(ratioScaled);
-    }
-
-    function _test_cannotRegisterMinThreshold(uint48 ratio) internal {
-        for (uint48 liqThreshold = 0; liqThreshold < 115; liqThreshold++) {
-            vm.expectRevert(Errors.PM__InvalidLiqThreshold.selector);
-            positionManager.registerCollateral(address(mockWETH), ratio, liqThreshold * BPS_SCALER);
+            positionManager.registerCollateral(address(mockWETH), ratio * BPS_SCALER);
         }
     }
 
@@ -141,7 +127,7 @@ contract PM is BaseTest {
         console.log("INITIAL HEALTH: ", initialHealth);
         (uint256 initUsdPrice,) = ngnOracle.getUsdPricePerNgn();
         console.log("INITIAL USD PER NGN PRICE: ", initUsdPrice);
-        uint256 newPrice = 410;
+        uint256 newPrice = 41e11;
         ngnOracle.updatePrice(newPrice);
         (uint256 newUsdPrice,) = ngnOracle.getUsdPricePerNgn();
         console.log("NEW USD PER NGN PRICE: ", newUsdPrice);
@@ -194,10 +180,8 @@ contract PM is BaseTest {
     }
 
     function test_Purge_Success() external init {
-        uint48 plainRatio = 150;
-        uint48 scaledToBps = plainRatio * BPS_SCALER;
-        uint48 plainThreshold = 130;
-        uint48 thresholdScaledToBps = plainThreshold * BPS_SCALER;
+        uint96 plainRatio = 150;
+        uint96 scaledToBps = plainRatio * BPS_SCALER;
 
         address borrower = USERA;
         address liquidator = OWNER;
@@ -206,7 +190,7 @@ contract PM is BaseTest {
         uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), scaledToBps, thresholdScaledToBps);
+        positionManager.registerCollateral(address(mockWETH), scaledToBps);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         (, PositionManager.PositionConfig memory positions) = positionManager.userConfig(borrower, address(mockWETH));
@@ -256,9 +240,6 @@ contract PM is BaseTest {
         uint256 h5 = positionManager.userPositionHealth(borrower, address(mockWETH), 0);
         console.log("BORROWER H5: ", h5);
 
-        (PositionManager.CollateralConfig memory config2,) = positionManager.userConfig(borrower, address(mockWETH));
-        assertLt(h5, config2.customLiqThreshold);
-
         // Perform Purge not position is unhealthy
         (uint256 cValue, uint256 liqBonus) = positionManager.collateralValue(address(mockWETH), liqAmount);
         console.log("EXPECTED CVALUE AND BONUS FOR liquidator", cValue, liqBonus);
@@ -285,15 +266,13 @@ contract PM is BaseTest {
         _changePrank(USERA);
         address token = address(mockWETH);
 
-        uint48 newRatio = 170 * BPS_SCALER;
-        uint48 newThreshold = 140 * BPS_SCALER;
+        uint96 newRatio = 170 * BPS_SCALER;
 
         // Route fallback should trigger registerCollateral
-        positionManager.updateCollateralConfig(token, newRatio, newThreshold);
+        positionManager.updateCollateralConfig(token, newRatio);
 
         (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
         assertEq(config.customCollateralRatio, newRatio);
-        assertEq(config.customLiqThreshold, newThreshold);
         assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
     }
 
@@ -301,50 +280,14 @@ contract PM is BaseTest {
         _changePrank(USERA);
         address token = address(mockWETH);
 
-        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(token, uint96(160) * BPS_SCALER);
 
-        uint48 updatedRatio = 180 * BPS_SCALER;
-        uint48 updatedThreshold = 150 * BPS_SCALER;
+        uint96 updatedRatio = uint96(180) * BPS_SCALER;
 
-        positionManager.updateCollateralConfig(token, updatedRatio, updatedThreshold);
+        positionManager.updateCollateralConfig(token, updatedRatio);
 
         (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
         assertEq(config.customCollateralRatio, updatedRatio);
-        assertEq(config.customLiqThreshold, updatedThreshold);
-    }
-
-    function test_UpdateCollateralConfig_Assembly_OnlyRatio() external init {
-        _changePrank(USERA);
-        address token = address(mockWETH);
-
-        uint48 initialRatio = 160 * BPS_SCALER;
-        uint48 initialThreshold = 130 * BPS_SCALER;
-        positionManager.registerCollateral(token, initialRatio, initialThreshold);
-
-        uint48 newRatio = 190 * BPS_SCALER;
-
-        positionManager.updateCollateralConfig(token, newRatio, 0);
-
-        (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
-        assertEq(config.customCollateralRatio, newRatio);
-        assertEq(config.customLiqThreshold, initialThreshold);
-    }
-
-    function test_UpdateCollateralConfig_Assembly_OnlyThreshold() external init {
-        _changePrank(USERA);
-        address token = address(mockWETH);
-
-        uint48 initialRatio = 160 * BPS_SCALER;
-        uint48 initialThreshold = 130 * BPS_SCALER;
-        positionManager.registerCollateral(token, initialRatio, initialThreshold);
-
-        uint48 newThreshold = 145 * BPS_SCALER;
-
-        positionManager.updateCollateralConfig(token, 0, newThreshold);
-
-        (PositionManager.CollateralConfig memory config,) = positionManager.userConfig(USERA, token);
-        assertEq(config.customCollateralRatio, initialRatio);
-        assertEq(config.customLiqThreshold, newThreshold);
     }
 
     function test_Cannot_UpdateCollateralConfig_WhenInDebt() external init {
@@ -355,81 +298,52 @@ contract PM is BaseTest {
         _changePrank(USERA);
         address token = address(mockWETH);
 
-        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(token, uint96(160) * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(token, depositAmount);
         positionManager.openPosition(token, mintAmount);
 
         vm.expectRevert(Errors.PM__CannotModifyParametersWithActiveDebt.selector);
-        positionManager.updateCollateralConfig(token, 180 * BPS_SCALER, 140 * BPS_SCALER);
+        positionManager.updateCollateralConfig(token, 180 * BPS_SCALER);
     }
 
     function test_Cannot_UpdateCollateralConfig_InvalidRatio() external init {
         _changePrank(USERA);
         address token = address(mockWETH);
-        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(token, uint96(160) * BPS_SCALER);
 
-        uint48 invalidRatio = 120 * BPS_SCALER; // Below MIN_COLLATERAL_RATIO (150)
+        uint96 invalidRatio = uint96(120) * BPS_SCALER; // Below MIN_COLLATERAL_RATIO (150)
 
         vm.expectRevert(Errors.PM__InvalidCollateralRatio.selector);
-        positionManager.updateCollateralConfig(token, invalidRatio, 130 * BPS_SCALER);
+        positionManager.updateCollateralConfig(token, invalidRatio);
     }
 
-    function test_Cannot_UpdateCollateralConfig_InvalidThreshold() external init {
+    function testFuzz_updateCollateralConfig_validBoundaries(uint96 ratio) external init {
         _changePrank(USERA);
         address token = address(mockWETH);
-        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
-
-        uint48 invalidThreshold = 100 * BPS_SCALER; // Below MIN_LIQ_THRESHOLD (115)
-
-        vm.expectRevert(Errors.PM__InvalidLiqThreshold.selector);
-        positionManager.updateCollateralConfig(token, 160 * BPS_SCALER, invalidThreshold);
-    }
-
-    function test_Cannot_UpdateCollateralConfig_InvalidBuffer() external init {
-        _changePrank(USERA);
-        address token = address(mockWETH);
-        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
-
-        uint48 ratio = 150 * BPS_SCALER;
-        uint48 invalidThreshold = 155 * BPS_SCALER; // threshold >= ratio
-
-        vm.expectRevert(Errors.PM__InvalidThresholdBuffer.selector);
-        positionManager.updateCollateralConfig(token, ratio, invalidThreshold);
-    }
-
-    function testFuzz_updateCollateralConfig_validBoundaries(uint48 ratio, uint48 threshold) external init {
-        _changePrank(USERA);
-        address token = address(mockWETH);
-        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(token, uint96(160) * BPS_SCALER);
 
         // Bound parameters within safe operational limits
-        vm.assume(ratio > 150 * BPS_SCALER);
-        vm.assume(ratio < 500 * BPS_SCALER);
-        vm.assume(threshold < ratio);
-        vm.assume(threshold > 115 * BPS_SCALER);
+        vm.assume(ratio > uint96(150) * BPS_SCALER);
+        vm.assume(ratio < uint96(500) * BPS_SCALER);
 
-        positionManager.updateCollateralConfig(token, ratio, threshold);
+        positionManager.updateCollateralConfig(token, ratio);
 
         PositionManager.CollateralConfig memory config = positionManager.collateralConfig(USERA, token);
         assertEq(config.customCollateralRatio, ratio);
-        assertEq(config.customLiqThreshold, threshold);
     }
 
-    function testFuzz_RevertIf_updateCollateralConfig_ratioBelowMin(uint48 ratio, uint48 threshold) external init {
+    function testFuzz_RevertIf_updateCollateralConfig_ratioBelowMin(uint96 ratio) external init {
         _changePrank(USERA);
         address token = address(mockWETH);
-        positionManager.registerCollateral(token, 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(token, uint96(160) * BPS_SCALER);
 
         // Bound ratio to strictly below MIN_COLLATERAL_RATIO (150 * BPS_SCALER)
-        // Bound threshold to valid limits so only the ratio triggers the revert
         vm.assume(ratio > 0);
-        vm.assume(ratio < 150 * BPS_SCALER);
-        vm.assume(threshold < 150 * BPS_SCALER);
-        vm.assume(threshold > 115 * BPS_SCALER);
+        vm.assume(ratio < uint96(150) * BPS_SCALER);
 
         vm.expectRevert(Errors.PM__InvalidCollateralRatio.selector);
-        positionManager.updateCollateralConfig(token, ratio, threshold);
+        positionManager.updateCollateralConfig(token, ratio);
     }
 
     function test_Purge_StandardPartialLiquidation_Success() external init {
@@ -443,7 +357,7 @@ contract PM is BaseTest {
         // Setup borrower position
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), uint96(160) * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), mintAmount);
@@ -483,7 +397,7 @@ contract PM is BaseTest {
 
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), uint96(160) * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), initialMintAmount);
@@ -545,7 +459,7 @@ contract PM is BaseTest {
 
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), mintAmount);
@@ -572,7 +486,7 @@ contract PM is BaseTest {
 
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), mintAmount);
@@ -594,7 +508,7 @@ contract PM is BaseTest {
 
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), mintAmount);
@@ -613,7 +527,7 @@ contract PM is BaseTest {
 
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), mintAmount);
@@ -636,7 +550,7 @@ contract PM is BaseTest {
 
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), mintAmount);
@@ -665,7 +579,7 @@ contract PM is BaseTest {
         console.log("BORROWER H1: ", h1);
         mockWETH.transfer(borrower, depositAmount);
         _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER, 130 * BPS_SCALER);
+        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER);
         mockWETH.approve(address(positionManager), depositAmount);
         positionManager.depositCollateral(address(mockWETH), depositAmount);
         positionManager.openPosition(address(mockWETH), mintAmount);
@@ -693,14 +607,13 @@ contract PM is BaseTest {
     }
 
     function test_USDC_PositionHealth_Precision() external init {
-        uint48 scaledRatio = 150 * BPS_SCALER;
-        uint48 scaledThreshold = 130 * BPS_SCALER;
+        uint96 scaledRatio = uint96(150) * BPS_SCALER;
         _changePrank(USERA);
 
         // Deposit 1,000 USDC ($1,000 USD value)
         uint128 usdcDeposit = 1_000 * 1e6;
         mockUSDC.mint(USERA, usdcDeposit);
-        positionManager.registerCollateral(address(mockUSDC), scaledRatio, scaledThreshold);
+        positionManager.registerCollateral(address(mockUSDC), scaledRatio);
         mockUSDC.approve(address(positionManager), usdcDeposit);
         positionManager.depositCollateral(address(mockUSDC), usdcDeposit);
 
@@ -715,14 +628,13 @@ contract PM is BaseTest {
     }
 
     function test_USDC_Depeg_PurgeWorkflow() external init {
-        uint48 scaledRatio = 150 * BPS_SCALER;
-        uint48 scaledThreshold = 130 * BPS_SCALER;
+        uint96 scaledRatio = uint96(150) * BPS_SCALER;
 
         // Setup Borrower
         _changePrank(USERA);
         uint128 usdcDeposit = 1300 * 1e6; // $1,300 USDC
         mockUSDC.mint(USERA, usdcDeposit);
-        positionManager.registerCollateral(address(mockUSDC), scaledRatio, scaledThreshold);
+        positionManager.registerCollateral(address(mockUSDC), scaledRatio);
         mockUSDC.approve(address(positionManager), usdcDeposit);
         positionManager.depositCollateral(address(mockUSDC), usdcDeposit);
 

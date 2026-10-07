@@ -22,8 +22,6 @@ contract NGNOracle is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
     // --- Custom Errors ---
     error NGNOracle__InvalidPrice();
     error NGNOracle__InvalidAddress();
-    error NGNOracle__FeedNotFound();
-    error NGNOracle__InvalidFeedResponse();
 
     // --- Events ---
     event PriceUpdated(uint256 indexed newPrice, uint256 indexed timestamp);
@@ -61,17 +59,17 @@ contract NGNOracle is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
         return (priceConfig.pricePerNgn, priceConfig.updatedAt);
     }
 
-    function getAssetPricePerNgn(address asset) external view returns (uint256) {
+    function getAssetPricePerNgn(address asset) external view returns (uint256 price, uint256 updatedAt) {
         address feed = tokenToUsdFeed[asset];
-        if (feed == address(0)) revert NGNOracle__FeedNotFound();
+        if (feed == address(0)) return (0, priceConfig.updatedAt);
         AggregatorV3Interface priceFeed = AggregatorV3Interface(feed);
         (, int256 rawPrice,,,) = priceFeed.latestRoundData();
-        if (rawPrice <= 0) revert NGNOracle__InvalidFeedResponse();
+        if (rawPrice <= 0) return (0, priceConfig.updatedAt);
         uint8 feedDecimals = priceFeed.decimals();
         uint256 tokenUsdPrice = uint256(rawPrice);
         uint256 flippedTokenPrice = (10 ** (feedDecimals + decimals)) / tokenUsdPrice;
         uint256 ngnPrice = priceConfig.pricePerNgn;
-        return (flippedTokenPrice * ngnPrice) / (10 ** 18);
+        return ((flippedTokenPrice * ngnPrice) / (10 ** 18), priceConfig.updatedAt);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) { }
