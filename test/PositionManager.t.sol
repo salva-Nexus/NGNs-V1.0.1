@@ -932,7 +932,6 @@ contract PM is BaseTest {
 
         // 3) a smaller additional borrow that stays above the ratio succeeds
         positionManager.openPosition(address(0), safeExtraDebt);
-
         (, pos) = positionManager.userConfig(OWNER, address(0));
         assertEq(pos.mintedNgns, firstDebt + safeExtraDebt);
         assertEq(ngns.balanceOf(OWNER), ngnsBefore + firstDebt + safeExtraDebt);
