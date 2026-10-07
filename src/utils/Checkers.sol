@@ -52,11 +52,15 @@ abstract contract Checkers is Views {
         return ngnsAmount;
     }
 
-    function _checkDepositAndMintReq(address token, uint256 amount, address priceFeed) internal view {
+    function _checkDepositAndMintReq(address token, uint256 amount, address priceFeed, uint256 cAmount) internal view {
         if (priceFeed == address(0)) {
             if (!isRegisteredCollateral(msg.sender, token)) {
                 revert PM__UnregisteredCollateral();
             }
+        }
+        if (cAmount > 0) {
+            if (cAmount > 0 && msg.value > 0) revert PM__Amount_Mismatch();
+            if (token == address(0) && cAmount > 0) revert PM__Amount_Mismatch();
         }
         if (amount <= 0) revert PM__ZeroAmount();
         if (amount > MINT_CAP) {

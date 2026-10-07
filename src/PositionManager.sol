@@ -76,10 +76,8 @@ contract PositionManager is Checkers, Events, Modifier {
     /* ========================================================================================= */
 
     function depositCollateral(address token, uint128 collateralAmount) public payable {
-        if (collateralAmount > 0 && msg.value > 0) revert PM__Amount_Mismatch();
-        if (token == address(0) && collateralAmount > 0) revert PM__Amount_Mismatch();
         uint128 cacheAmount = collateralAmount == 0 ? uint128(msg.value) : collateralAmount;
-        _checkDepositAndMintReq(token, uint256(cacheAmount), address(0));
+        _checkDepositAndMintReq(token, uint256(cacheAmount), address(0), uint256(collateralAmount));
         _updateCollateralValue(msg.sender, token, cacheAmount, 1);
         emit CollateralDeposited(msg.sender, token, uint256(cacheAmount));
         if (token != address(0)) {
@@ -89,7 +87,7 @@ contract PositionManager is Checkers, Events, Modifier {
 
     function openPosition(address token, uint128 ngnsAmount) public {
         (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
-        _checkDepositAndMintReq(token, uint256(ngnsAmount), config.priceFeed);
+        _checkDepositAndMintReq(token, uint256(ngnsAmount), config.priceFeed, 0);
         uint256 nValue = ngnValue(token, uint256(positions.collateralDeposited));
         _validatePositionHealth(
             nValue, uint256(ngnsAmount), uint256(positions.mintedNgns), uint256(config.customCollateralRatio)
