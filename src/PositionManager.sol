@@ -39,7 +39,7 @@ contract PositionManager is Checkers, Events, Modifier {
 
     function _whitelistCollateralToken(address[] memory token, address[] memory priceFeedAddress) internal {
         for (uint256 i = 0; i < token.length;) {
-            if (token[i] == address(0) || priceFeedAddress[i] == address(0)) revert PM__InvalidPriceFeed();
+            if (token[i] == address(0) && priceFeedAddress[i] == address(0)) revert PM__InvalidPriceFeed();
 
             allowedCollateralFeeds[token[i]] = priceFeedAddress[i];
             emit CollateralWhitelisted(token[i], priceFeedAddress[i]);
@@ -75,11 +75,16 @@ contract PositionManager is Checkers, Events, Modifier {
     /*                                       CORE POSITION LOGIC                                 */
     /* ========================================================================================= */
 
-    function depositCollateral(address token, uint128 collateralAmount) public {
-        _checkDepositAndMintReq(token, uint256(collateralAmount), address(0));
-        _updateCollateralValue(msg.sender, token, uint128(collateralAmount), 1);
-        emit CollateralDeposited(msg.sender, token, uint256(collateralAmount));
-        IERC20(token).safeTransferFrom(msg.sender, address(this), uint256(collateralAmount));
+    function depositCollateral(address token, uint128 collateralAmount) public payable {
+        if (collateralAmount > 0 && msg.value > 0) revert PM__Amount_Mismatch();
+        if (token == address(0) && collateralAmount > 0) revert PM__Amount_Mismatch();
+        uint128 cacheAmount = collateralAmount == 0 ? uint128(msg.value) : collateralAmount;
+        _checkDepositAndMintReq(token, uint256(cacheAmount), address(0));
+        _updateCollateralValue(msg.sender, token, cacheAmount, 1);
+        emit CollateralDeposited(msg.sender, token, uint256(cacheAmount));
+        if (token != address(0)) {
+            IERC20(token).safeTransferFrom(msg.sender, address(this), uint256(cacheAmount));
+        }
     }
 
     function openPosition(address token, uint128 ngnsAmount) public {
@@ -135,6 +140,11 @@ contract PositionManager is Checkers, Events, Modifier {
 
         emit Purged(user, token, msg.sender, receiver, amountToBurn, totalSeized, liqBonus);
         IAdapter(adapter).repay(msg.sender, uint256(amountToBurn));
+        if (token == address(0)) {
+            (bool success,) = payable(receiver).call{ value: totalSeized }("");
+            if (!success) revert PM__ETHTransferFailed();
+            return;
+        }
         IERC20(token).safeTransfer(receiver, totalSeized);
     }
 

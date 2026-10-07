@@ -26,4 +26,6 @@ abstract contract Errors {
     error PM__CanOnlyLiquidatePartially();
     error PM__AmountTooSmall();
     error PM__MintAmountExceedsLimit(uint256 amount, uint256 cap);
+    error PM__Amount_Mismatch();
+    error PM__ETHTransferFailed();
 }

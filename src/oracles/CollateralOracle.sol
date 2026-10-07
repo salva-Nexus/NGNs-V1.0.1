@@ -82,6 +82,6 @@ abstract contract CollateralOracle is Storage, Errors {
     }
 
     function _decimalOf(address token) internal view returns (uint8) {
-        return IERC20Metadata(token).decimals();
+        return token == address(0) ? 18 : IERC20Metadata(token).decimals();
     }
 }

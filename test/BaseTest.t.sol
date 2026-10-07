@@ -57,14 +57,15 @@ abstract contract BaseTest is Test {
         mockWETH.deposit{ value: wethToMint }();
         mockAggregatorV3ForWeth = new MockAggregatorV3(8, int256(wethToUsdPrice));
         mockAggregatorUsdcUsd = new MockAggregatorV3(8, int256(INITIAL_USDC_USD_PRICE));
-        address[] memory tokens = new address[](2);
+        address[] memory tokens = new address[](3);
         tokens[0] = address(mockWETH);
         tokens[1] = address(mockUSDC);
+        tokens[2] = address(0); // native ETH
 
-        address[] memory priceFeeds = new address[](2);
+        address[] memory priceFeeds = new address[](3);
         priceFeeds[0] = address(mockAggregatorV3ForWeth);
         priceFeeds[1] = address(mockAggregatorUsdcUsd);
-
+        priceFeeds[2] = address(mockAggregatorV3ForWeth); // ETH/USD reuses the 2000 USD feed
         positionManager = new PositionManager(
             address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds, 5_000_000 * 10 ** 18
         );

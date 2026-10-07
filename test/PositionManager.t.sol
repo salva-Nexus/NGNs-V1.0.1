@@ -848,4 +848,105 @@ contract PM is BaseTest {
 
         positionManager.withdraw(address(mockUSDC), OWNER, uint128(withdrawable2 + 1));
     }
+
+    /* ========================================================================= */
+    /*                       NATIVE ETH COLLATERAL TESTS                         */
+    /* ========================================================================= */
+
+    function test_Deposit_ETH_Collateral_Success() external init {
+        uint96 ratio = uint96(160) * BPS_SCALER;
+        uint128 firstDeposit = uint128(10 ether);
+        uint128 secondDeposit = uint128(5 ether);
+
+        positionManager.registerCollateral(address(0), ratio);
+        PositionManager.CollateralConfig memory config = positionManager.collateralConfig(OWNER, address(0));
+        assertEq(config.priceFeed, address(mockAggregatorV3ForWeth));
+        assertEq(config.customCollateralRatio, ratio);
+
+        uint256 ownerEthBefore = OWNER.balance;
+        uint256 pmEthBefore = address(positionManager).balance;
+
+        positionManager.depositCollateral{ value: firstDeposit }(address(0), 0);
+
+        PositionManager.PositionConfig memory position = positionManager.positionConfig(OWNER, address(0));
+        assertEq(position.collateralDeposited, firstDeposit);
+        assertEq(position.mintedNgns, 0);
+        assertEq(OWNER.balance, ownerEthBefore - firstDeposit);
+        assertEq(address(positionManager).balance, pmEthBefore + firstDeposit);
+
+        assertEq(
+            positionManager.ngnValue(address(0), firstDeposit),
+            positionManager.ngnValue(address(mockWETH), firstDeposit)
+        );
+
+        positionManager.depositCollateral{ value: secondDeposit }(address(0), 0);
+        position = positionManager.positionConfig(OWNER, address(0));
+        assertEq(position.collateralDeposited, firstDeposit + secondDeposit);
+        assertEq(OWNER.balance, ownerEthBefore - firstDeposit - secondDeposit);
+        assertEq(address(positionManager).balance, pmEthBefore + firstDeposit + secondDeposit);
+
+        vm.expectRevert();
+        positionManager.depositCollateral{ value: 1 ether }(address(0), uint128(2 ether));
+    }
+
+    function test_Borrow_Against_ETH_Collateral_Flow() external init {
+        uint96 ratio = uint96(160) * BPS_SCALER;
+        uint128 depositAmount = uint128(1 ether); // 1 ETH @ 2000 USD ~ 2.38M NGNS of collateral value
+        uint128 firstDebt = uint128(1_000_000 * 10 ** ngns.decimals());
+        uint128 safeExtraDebt = uint128(400_000 * 10 ** ngns.decimals()); // total 1.4M -> ~170% (safe)
+        uint128 unsafeExtraDebt = uint128(500_000 * 10 ** ngns.decimals()); // total 1.5M -> ~158.7% (< 160%)
+
+        positionManager.registerCollateral(address(0), ratio);
+        positionManager.depositCollateral{ value: depositAmount }(address(0), 0);
+
+        uint256 nValue = positionManager.ngnValue(address(0), depositAmount);
+        console.log("NGN VALUE OF 1 ETH: ", nValue);
+        uint256 healthNoDebt = positionManager.userPositionHealth(OWNER, address(0), 0);
+        console.log("HEALTH (NO DEBT): ", healthNoDebt);
+
+        // 1) borrow NGNS against ETH collateral
+        uint256 ngnsBefore = ngns.balanceOf(OWNER);
+        positionManager.openPosition(address(0), firstDebt);
+
+        (, PositionManager.PositionConfig memory pos) = positionManager.userConfig(OWNER, address(0));
+        assertEq(pos.collateralDeposited, depositAmount);
+        assertEq(pos.mintedNgns, firstDebt);
+        assertEq(ngns.balanceOf(OWNER), ngnsBefore + firstDebt);
+
+        uint256 healthAfterFirst = positionManager.userPositionHealth(OWNER, address(0), 0);
+        console.log("HEALTH AFTER FIRST BORROW: ", healthAfterFirst);
+        assertLt(healthAfterFirst, healthNoDebt);
+        assertGt(healthAfterFirst, ratio);
+
+        // 2) borrowing past the custom ratio must revert and leave the position untouched
+        uint256 previewUnsafe = positionManager.userPositionHealth(OWNER, address(0), unsafeExtraDebt);
+        console.log("PREVIEW HEALTH (UNSAFE BORROW): ", previewUnsafe);
+        assertLt(previewUnsafe, ratio);
+
+        vm.expectRevert();
+        positionManager.openPosition(address(0), unsafeExtraDebt);
+
+        (, pos) = positionManager.userConfig(OWNER, address(0));
+        assertEq(pos.mintedNgns, firstDebt);
+        assertEq(ngns.balanceOf(OWNER), ngnsBefore + firstDebt);
+
+        // 3) a smaller additional borrow that stays above the ratio succeeds
+        positionManager.openPosition(address(0), safeExtraDebt);
+
+        (, pos) = positionManager.userConfig(OWNER, address(0));
+        assertEq(pos.mintedNgns, firstDebt + safeExtraDebt);
+        assertEq(ngns.balanceOf(OWNER), ngnsBefore + firstDebt + safeExtraDebt);
+
+        uint256 healthAfterSecond = positionManager.userPositionHealth(OWNER, address(0), 0);
+        console.log("HEALTH AFTER SECOND BORROW: ", healthAfterSecond);
+        assertLt(healthAfterSecond, healthAfterFirst);
+        assertGt(healthAfterSecond, ratio);
+
+        // 4) ETH/USD drops 25% -> health falls below the position's custom ratio
+        mockAggregatorV3ForWeth.updateAnswer(1500e8);
+        uint256 healthAfterDrop = positionManager.userPositionHealth(OWNER, address(0), 0);
+        console.log("HEALTH AFTER ETH PRICE DROP: ", healthAfterDrop);
+        assertLt(healthAfterDrop, healthAfterSecond);
+        assertLt(healthAfterDrop, ratio);
+    }
 }
