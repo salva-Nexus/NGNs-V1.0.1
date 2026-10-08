@@ -918,7 +918,6 @@ contract PM is BaseTest {
         assertLt(healthAfterFirst, healthNoDebt);
         assertGt(healthAfterFirst, ratio);
 
-        // 2) borrowing past the custom ratio must revert and leave the position untouched
         uint256 previewUnsafe = positionManager.userPositionHealth(OWNER, address(0), unsafeExtraDebt);
         console.log("PREVIEW HEALTH (UNSAFE BORROW): ", previewUnsafe);
         assertLt(previewUnsafe, ratio);
@@ -930,7 +929,6 @@ contract PM is BaseTest {
         assertEq(pos.mintedNgns, firstDebt);
         assertEq(ngns.balanceOf(OWNER), ngnsBefore + firstDebt);
 
-        // 3) a smaller additional borrow that stays above the ratio succeeds
         positionManager.openPosition(address(0), safeExtraDebt);
         (, pos) = positionManager.userConfig(OWNER, address(0));
         assertEq(pos.mintedNgns, firstDebt + safeExtraDebt);
@@ -941,11 +939,78 @@ contract PM is BaseTest {
         assertLt(healthAfterSecond, healthAfterFirst);
         assertGt(healthAfterSecond, ratio);
 
-        // 4) ETH/USD drops 25% -> health falls below the position's custom ratio
         mockAggregatorV3ForWeth.updateAnswer(1500e8);
         uint256 healthAfterDrop = positionManager.userPositionHealth(OWNER, address(0), 0);
         console.log("HEALTH AFTER ETH PRICE DROP: ", healthAfterDrop);
         assertLt(healthAfterDrop, healthAfterSecond);
         assertLt(healthAfterDrop, ratio);
+    }
+
+    function test_Purge_ETH_Collateral_PaysInETH() external init {
+        address borrower = USERA;
+        address liquidator = OWNER;
+        address receiver = makeAddr("RECEIVER");
+        uint96 ratio = uint96(160) * BPS_SCALER;
+        uint128 borrowerDeposit = uint128(1 ether);
+        uint128 borrowerDebt = uint128(1_400_000 * 10 ** ngns.decimals());
+        uint128 liqAmount = uint128(500_000 * 10 ** ngns.decimals()); // ~36% of the debt, under the 50% cap
+
+        // 1) borrower: 1 ETH collateral, 1.4M NGNS debt (~170% at $2,000)
+        vm.deal(borrower, 5 ether);
+        _changePrank(borrower);
+        positionManager.registerCollateral(address(0), ratio);
+        positionManager.depositCollateral{ value: borrowerDeposit }(address(0), 0);
+        positionManager.openPosition(address(0), borrowerDebt);
+
+        // 2) liquidator needs NGNS to burn -> opens its own well-collateralised ETH position
+        _changePrank(liquidator);
+        positionManager.registerCollateral(address(0), ratio);
+        positionManager.depositCollateral{ value: 5 ether }(address(0), 0);
+        positionManager.openPosition(address(0), borrowerDebt);
+
+        // 3) ETH @ $1,400 -> ~119%: below the user's 160% ratio but above the 115% liquidation line (grace)
+        mockAggregatorV3ForWeth.updateAnswer(1400e8);
+        uint256 graceHealth = positionManager.userPositionHealth(borrower, address(0), 0);
+        console.log("BORROWER HEALTH @ $1,400 (GRACE): ", graceHealth);
+        assertLt(graceHealth, ratio);
+        assertGt(graceHealth, 115 * BPS_SCALER);
+
+        vm.expectRevert(Errors.PM__NotAllowed.selector);
+        positionManager.purge(borrower, address(0), receiver, liqAmount);
+
+        // 4) ETH @ $1,300 -> ~110.5%: below 115%, so the position is purgeable
+        mockAggregatorV3ForWeth.updateAnswer(1300e8);
+        uint256 liqHealth = positionManager.userPositionHealth(borrower, address(0), 0);
+        console.log("BORROWER HEALTH @ $1,300 (LIQUIDATABLE): ", liqHealth);
+        assertLt(liqHealth, 115 * BPS_SCALER);
+
+        (uint256 cValue, uint256 liqBonus) = positionManager.collateralValue(address(0), liqAmount);
+        uint256 expectedSeized = cValue + liqBonus;
+        console.log("EXPECTED ETH SEIZED: ", expectedSeized);
+        console.log("EXPECTED LIQ BONUS: ", liqBonus);
+        assertGt(cValue, 0);
+        assertLt(expectedSeized, borrowerDeposit); // not hitting the collateral cap
+
+        (, PositionManager.PositionConfig memory posBefore) = positionManager.userConfig(borrower, address(0));
+        uint256 receiverEthBefore = receiver.balance;
+        uint256 pmEthBefore = address(positionManager).balance;
+        uint256 liquidatorNgnsBefore = ngns.balanceOf(liquidator);
+
+        positionManager.purge(borrower, address(0), receiver, liqAmount);
+
+        (, PositionManager.PositionConfig memory posAfter) = positionManager.userConfig(borrower, address(0));
+        console.log("COLLATERAL LEFT: ", posAfter.collateralDeposited);
+        console.log("DEBT LEFT: ", posAfter.mintedNgns);
+
+        // receiver is paid in native ETH, straight out of the PositionManager
+        assertEq(receiver.balance, receiverEthBefore + expectedSeized);
+        assertEq(address(positionManager).balance, pmEthBefore - expectedSeized);
+
+        // borrower loses exactly the seized ETH and the burned debt
+        assertEq(posAfter.collateralDeposited, posBefore.collateralDeposited - expectedSeized);
+        assertEq(posAfter.mintedNgns, posBefore.mintedNgns - liqAmount);
+
+        // liquidator's NGNS is burned 1:1
+        assertEq(ngns.balanceOf(liquidator), liquidatorNgnsBefore - liqAmount);
     }
 }
