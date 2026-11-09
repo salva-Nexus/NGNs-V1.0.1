@@ -44,6 +44,6 @@ contract NGNSTest is BaseTest {
         uint256 expectedWethPerNgn = 420_000_000_000;
         assertEq(wethPerNgn, expectedWethPerNgn);
         console.log(unicode"NGN/WETH Oracle Price ✅ =>", wethPerNgn);
-        console.logBytes32(keccak256("PRICE_UPDATE_ROLE"));
+        console.logBytes32(keccak256("salva_nexus_loving_user-"));
     }
 }

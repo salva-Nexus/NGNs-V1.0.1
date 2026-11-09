@@ -68,23 +68,9 @@ abstract contract Checkers is Views {
         }
     }
 
-    function _checkWithdrawalReq(
-        address token,
-        address receiver,
-        uint256 collateralDeposited,
-        uint256 mintedNgns,
-        uint256 customCollateralRatio
-    ) internal view {
-        // not calling userPositionHealth here, to prevent double sload
-        uint256 nValue = ngnValue(token, uint256(collateralDeposited));
-        uint256 health = mintedNgns > 0 ? (nValue * BPS_DENOMINATOR) / uint256(mintedNgns) : type(uint256).max;
-        if (health < customCollateralRatio) revert PM__UndercollateralizedPosition();
+    function _checkWithdrawalReq(address receiver, uint256 cW, uint256 amount) internal pure {
+        if (amount > cW) revert PM__UndercollateralizedPosition();
         if (receiver == address(0)) revert PM__InvalidAddress();
-    }
-
-    function _checkFinalWithdrawalReq(address token, uint256 customCollateralRatio) internal view {
-        uint256 health = userPositionHealth(msg.sender, token, 0);
-        if (health < customCollateralRatio) revert PM__UndercollateralizedPosition();
     }
 
     function _validatePositionHealth(

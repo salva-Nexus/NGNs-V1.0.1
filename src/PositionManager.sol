@@ -22,12 +22,14 @@ contract PositionManager is Checkers, Events, Modifier {
         address _adapter,
         address[] memory token,
         address[] memory priceFeedAddress,
-        uint256 _maxCap
+        uint256 _maxCap,
+        string memory _version
     ) {
         ngns = _ngns;
         ngnPriceFeed = _ngnPriceFeed;
         adapter = _adapter;
         MINT_CAP = _maxCap;
+        version = _version;
 
         if (token.length != priceFeedAddress.length) revert PM__InvalidTokenToFeedLength();
         _whitelistCollateralToken(token, priceFeedAddress);
@@ -104,17 +106,15 @@ contract PositionManager is Checkers, Events, Modifier {
     }
 
     function withdraw(address token, address receiver, uint128 amount) public {
-        (CollateralConfig memory config, PositionConfig memory positions) = userConfig(msg.sender, token);
-        _checkWithdrawalReq(
-            token,
-            receiver,
-            uint256(positions.collateralDeposited),
-            uint256(positions.mintedNgns),
-            uint256(config.customCollateralRatio)
-        );
+        uint256 cW = collateralAmountWithdrawable(msg.sender, token);
+        _checkWithdrawalReq(receiver, cW, uint256(amount));
         _updateCollateralValue(msg.sender, token, amount, 0);
-        _checkFinalWithdrawalReq(token, uint256(config.customCollateralRatio));
         emit CollateralWithdrawn(msg.sender, token, receiver, amount);
+        if (token == address(0)) {
+            (bool success,) = payable(receiver).call{ value: uint256(amount) }("");
+            if (!success) revert PM__ETHTransferFailed();
+            return;
+        }
         IERC20(token).safeTransfer(receiver, uint256(amount));
     }
 

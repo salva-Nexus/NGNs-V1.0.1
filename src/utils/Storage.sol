@@ -14,10 +14,11 @@ abstract contract Storage {
     uint256 internal constant STALE_PRICE_THRESHOLD = 3 hours;
     uint256 internal constant PERCENTAGE_SCALER = 100;
 
-    address internal immutable ngns;
-    address internal immutable ngnPriceFeed;
-    address internal immutable adapter;
+    address public immutable ngns;
+    address public immutable ngnPriceFeed;
+    address public immutable adapter;
     uint256 public immutable MINT_CAP;
+    string public version;
 
     struct CollateralConfig {
         address priceFeed;

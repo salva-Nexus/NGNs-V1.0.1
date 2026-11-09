@@ -67,7 +67,7 @@ abstract contract BaseTest is Test {
         priceFeeds[1] = address(mockAggregatorUsdcUsd);
         priceFeeds[2] = address(mockAggregatorV3ForWeth); // ETH/USD reuses the 2000 USD feed
         positionManager = new PositionManager(
-            address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds, 5_000_000 * 10 ** 18
+            address(ngns), address(ngnOracle), address(adapter), tokens, priceFeeds, 5_000_000 * 10 ** 18, "v1"
         );
         adapter.setPositionManager(address(positionManager), true);
         console.log(unicode"WETH TOKEN ✅                  =>                  ", address(mockWETH));
