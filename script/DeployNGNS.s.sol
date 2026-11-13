@@ -7,7 +7,7 @@ import { PositionManager } from "../src/PositionManager.sol";
 import { NGNOracle } from "../src/oracles/NGNOracle.sol";
 import { Addresses } from "./Addresses.s.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { Script, console } from "forge-std/Script.sol";
+import { Script, console } from "forge-std/Script.sol"; // ETH/NGNS // NGNS/ETH
 
 contract DeployNGNS is Script, Addresses {
     function run() external returns (NGNS ngns, Adapter adapter, NGNOracle ngnOracle, PositionManager positionManager) {
