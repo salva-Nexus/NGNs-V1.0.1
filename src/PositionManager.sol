@@ -146,6 +146,7 @@ contract PositionManager is Checkers, Events {
         openPosition(token, nAmount);
     }
 
+
     function settleAndWithdraw(address token, address receiver, uint128 nAmountToBurn, uint128 cAmountToWithdraw)
         external
     {
