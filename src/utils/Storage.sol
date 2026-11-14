@@ -17,7 +17,6 @@ abstract contract Storage {
     address public immutable ngns;
     address public immutable ngnPriceFeed;
     address public immutable adapter;
-    uint256 public immutable MINT_CAP;
     string public version;
 
     struct CollateralConfig {

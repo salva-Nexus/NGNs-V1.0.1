@@ -11,7 +11,6 @@ import { Script, console } from "forge-std/Script.sol"; // ETH/NGNS // NGNS/ETH
 
 contract DeployNGNS is Script, Addresses {
     function run() external returns (NGNS ngns, Adapter adapter, NGNOracle ngnOracle, PositionManager positionManager) {
-        uint256 mintCap = 5_000_000 * 10 ** 18;
         uint256 usdPricePerNgn = 840000000000000;
 
         console.log("==================================================");
@@ -53,7 +52,7 @@ contract DeployNGNS is Script, Addresses {
 
         // 6. Deploy PositionManager
         positionManager = new PositionManager(
-            address(ngns), address(ngnOracle), address(adapter), _getTokens(), _getPriceFeeds(), mintCap, "v2"
+            address(ngns), address(ngnOracle), address(adapter), _getTokens(), _getPriceFeeds(), "v1"
         );
         console.log("PositionManager  :", address(positionManager));
 

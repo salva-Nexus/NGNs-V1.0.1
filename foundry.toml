@@ -3,6 +3,7 @@ src = "src"
 viaIR = true
 out = "out"
 libs = ["lib"]
+fs_permissions = [{ access = "read-write", path = "./.cursor" }]
 
 [fuzz]
 runs = 300

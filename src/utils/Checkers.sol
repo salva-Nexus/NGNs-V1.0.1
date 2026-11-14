@@ -8,9 +8,7 @@ abstract contract Checkers is Views {
         if (isRegisteredCollateral(msg.sender, token)) {
             revert PM__CollateralLive();
         }
-
         if (price <= 0) revert PM__InvalidOracle();
-
         if (ratio < MIN_COLLATERAL_RATIO) {
             revert PM__InvalidCollateralRatio();
         }
@@ -18,14 +16,11 @@ abstract contract Checkers is Views {
 
     function _checkUpdateReq(address token, uint256 newRatio, bool isInDebt) internal view returns (bool) {
         if (!isRegisteredCollateral(msg.sender, token)) return false;
-
         if (isInDebt) revert PM__CannotModifyParametersWithActiveDebt();
-
-        if (newRatio > 0) {
-            if (newRatio < MIN_COLLATERAL_RATIO) {
-                revert PM__InvalidCollateralRatio();
-            }
+        if (newRatio < MIN_COLLATERAL_RATIO) {
+            revert PM__InvalidCollateralRatio();
         }
+
         return true;
     }
 
@@ -42,7 +37,6 @@ abstract contract Checkers is Views {
         } else {
             ngnsAmount = currentDebt;
         }
-
         bytes memory data = abi.encodeWithSignature("balanceOf(address)", msg.sender);
         (bool success, bytes memory res) = ngns.staticcall(data);
         if (!success) revert PM__BalanceReadFailed();
@@ -52,20 +46,21 @@ abstract contract Checkers is Views {
         return ngnsAmount;
     }
 
-    function _checkDepositAndMintReq(address token, uint256 amount, address priceFeed, uint256 cAmount) internal view {
+    function _checkDepositAndMintReq(address token, uint256 amount, address priceFeed, uint256 cAmount, bool isOp)
+        internal
+        view
+    {
         if (priceFeed == address(0)) {
             if (!isRegisteredCollateral(msg.sender, token)) {
                 revert PM__UnregisteredCollateral();
             }
         }
-        if (cAmount > 0) {
-            if (cAmount > 0 && msg.value > 0) revert PM__Amount_Mismatch();
-            if (token == address(0) && cAmount > 0) revert PM__Amount_Mismatch();
+        if (!isOp) {
+            if (token != address(0) && cAmount <= 0) revert PM__Amount_Mismatch();
         }
+        if (cAmount > 0 && msg.value > 0) revert PM__Amount_Mismatch();
+        if (token == address(0) && cAmount > 0) revert PM__Amount_Mismatch();
         if (amount <= 0) revert PM__ZeroAmount();
-        if (amount > MINT_CAP) {
-            revert PM__MintAmountExceedsLimit(amount, MINT_CAP);
-        }
     }
 
     function _checkWithdrawalReq(address receiver, uint256 cW, uint256 amount) internal pure {
@@ -84,7 +79,6 @@ abstract contract Checkers is Views {
         if (healthFactor < customCollateralRatio) revert PM__UndercollateralizedPosition();
         uint256 debt = mintedNgns;
         if (debt == 0) return;
-
         uint256 maxBorrow = (collateralToNgnValue * BPS_DENOMINATOR) / customCollateralRatio;
         if (debt + ngnsAmountToMint > maxBorrow) revert PM__BreachesCollateralRatio();
     }

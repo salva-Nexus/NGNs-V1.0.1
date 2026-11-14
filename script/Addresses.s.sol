@@ -99,9 +99,9 @@ abstract contract Addresses {
 
     function _getPositionMangerV1() internal view returns (address) {
         uint256 chainId = block.chainid;
-        if (chainId == BASE_MAINNET) return address(0xe698C6D97F722993a7cf4830289ABA9dfe85EDB9);
+        if (chainId == BASE_MAINNET) return address(0x01ab2aB30E45e21f7Dd8c8bbDe797cc4C06FedFd);
         if (chainId == BASE_SEPOLIA) return address(0x98c8C7BFfECDE502E8f9764F8C2Dc0b87509DEc0);
-        if (chainId == BNB_MAINNET) return address(0x1638056996B3e902f4888380C1c83f2362153B6E);
+        if (chainId == BNB_MAINNET) return address(0x03025C37DC3E7A7aFE2F469aDBC16605f21861b5);
         if (chainId == BNB_TESTNET) return address(0x75C95a8421A7d07fb9f56D2F833f404A835b70c3);
         revert("Addresses: Unsupported Chain ID");
     }

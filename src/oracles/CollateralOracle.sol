@@ -77,7 +77,7 @@ abstract contract CollateralOracle is Storage, Errors {
         if (roundId == 0) {
             revert PM__InvalidRound();
         }
-        if (uint256(price) <= 0) revert PM__InvalidPrice();
+        if (price <= 0) revert PM__InvalidPrice();
         return (price, decimals);
     }
 

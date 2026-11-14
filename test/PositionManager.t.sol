@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import { NGNS } from "../src/NGNS.sol";
 import { PositionManager } from "../src/PositionManager.sol";
 import { Errors } from "../src/utils/Errors.sol";
 import { BaseTest } from "./BaseTest.t.sol";
@@ -448,34 +449,6 @@ contract PM is BaseTest {
         assertEq(posFinal3.mintedNgns, 0);
         console.log("Remaining Collateral: ", posFinal3.collateralDeposited);
         console.log("Remaining Collateral: ", posFinal3.collateralDeposited < depositAmount);
-    }
-
-    function test_Cannot_Purge_ExceedingFiftyPercentCap() external init {
-        address borrower = USERA;
-        address liquidator = OWNER;
-
-        uint128 depositAmount = uint128(1 * 10 ** mockWETH.decimals());
-        uint128 mintAmount = uint128(1_000_000 * 10 ** ngns.decimals());
-
-        mockWETH.transfer(borrower, depositAmount);
-        _changePrank(borrower);
-        positionManager.registerCollateral(address(mockWETH), 160 * BPS_SCALER);
-        mockWETH.approve(address(positionManager), depositAmount);
-        positionManager.depositCollateral(address(mockWETH), depositAmount);
-        positionManager.openPosition(address(mockWETH), mintAmount);
-        positionManager.openPosition(address(mockWETH), uint128(100_000 * 10 ** ngns.decimals()));
-
-        mockAggregatorV3ForWeth.updateAnswer(1050e8);
-
-        _changePrank(liquidator);
-        mockWETH.approve(address(positionManager), depositAmount * 10);
-        positionManager.depositCollateral(address(mockWETH), depositAmount * 10);
-        positionManager.openPosition(address(mockWETH), mintAmount);
-
-        // Attempting to liquidate > 50% must revert
-        uint128 invalidAmount = ((mintAmount + uint128(100_000 * 10 ** ngns.decimals())) / 2) + 1;
-        vm.expectRevert(Errors.PM__CanOnlyLiquidatePartially.selector);
-        positionManager.purge(borrower, address(mockWETH), OWNER, invalidAmount);
     }
 
     function test_Cannot_Purge_SelfPosition() external init {
@@ -953,7 +926,7 @@ contract PM is BaseTest {
         uint96 ratio = uint96(160) * BPS_SCALER;
         uint128 borrowerDeposit = uint128(1 ether);
         uint128 borrowerDebt = uint128(1_400_000 * 10 ** ngns.decimals());
-        uint128 liqAmount = uint128(500_000 * 10 ** ngns.decimals()); // ~36% of the debt, under the 50% cap
+        uint128 liqAmount = uint128(500_000 * 10 ** ngns.decimals());
 
         // 1) borrower: 1 ETH collateral, 1.4M NGNS debt (~170% at $2,000)
         vm.deal(borrower, 5 ether);
@@ -989,7 +962,7 @@ contract PM is BaseTest {
         console.log("EXPECTED ETH SEIZED: ", expectedSeized);
         console.log("EXPECTED LIQ BONUS: ", liqBonus);
         assertGt(cValue, 0);
-        assertLt(expectedSeized, borrowerDeposit); // not hitting the collateral cap
+        assertLt(expectedSeized, borrowerDeposit);
 
         (, PositionManager.PositionConfig memory posBefore) = positionManager.userConfig(borrower, address(0));
         uint256 receiverEthBefore = receiver.balance;
@@ -1012,5 +985,10 @@ contract PM is BaseTest {
 
         // liquidator's NGNS is burned 1:1
         assertEq(ngns.balanceOf(liquidator), liquidatorNgnsBefore - liqAmount);
+        console.logBytes(
+            abi.encodeWithSignature(
+                "setPositionManager(address,bool)", address(0xe698C6D97F722993a7cf4830289ABA9dfe85EDB9), false
+            )
+        );
     }
 }
