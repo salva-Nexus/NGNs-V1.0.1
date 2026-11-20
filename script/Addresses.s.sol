@@ -70,6 +70,7 @@ abstract contract Addresses {
         }
     }
 
+
     function _getNgns() internal view returns (address) {
         uint256 chainId = block.chainid;
         if (chainId == BASE_MAINNET) return address(0x79d61b73Ec980638ea4Efef7C5637aE37f596c6f);
