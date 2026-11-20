@@ -26,18 +26,9 @@ contract DeployNGNS is Script, Addresses {
         ngnOracle = NGNOracle(address(oracleProxy));
         console.log("NGN Oracle Proxy :", address(ngnOracle));
         console.log("NGN Oracle IMPL :", address(oracleImpl));
-        ngnOracle.grantRole(ngnOracle.PRICE_UPDATE_ROLE(), address(0x9Da6C69815A2b9FFe7eE08A0be00EF181881Ad71));
+        ngnOracle.grantRole(ngnOracle.PRICE_UPDATE_ROLE(), address(0xfD5A9828bac27495FAb7F6174b3de386E0554187));
         ngnOracle.updatePrice(usdPricePerNgn);
-        ngnOracle.setTokenUsdFeed(address(0), address(0xd5D290Fe2ae6b55F385ab9C14d2CeB91DD3d9022)); // ETH/USD
-        ngnOracle.setTokenUsdFeed(
-            address(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d), address(0x8068600c8f6d2fB3d44F5B4cb7E7f4Ac47c2c742)
-        );
-        ngnOracle.setTokenUsdFeed(
-            address(0x55D398326F9905FFF775485246999027b3197955), address(0x501e21126486424567f40D490856094D72986E41)
-        );
-        ngnOracle.setTokenUsdFeed(
-            address(0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD), address(0xca236E327F629f9Fc2c30A4E95775EbF0B89fac8)
-        );
+        
         // 2. Deploy NGNS Token
         ngns = new NGNS();
         console.log("NGNS Token       :", address(ngns), block.chainid);
@@ -58,7 +49,7 @@ contract DeployNGNS is Script, Addresses {
 
         // 7. Authorize PositionManager inside Adapter
         adapter.setPositionManager(address(positionManager), true);
-        adapter.grantRole(adapter.MANAGER_ADMIN_ROLE(), address(0xBCdE35307e897625E39915B200Be0A0a17088Da6));
+        adapter.grantRole(adapter.MANAGER_ADMIN_ROLE(), address(0x8f574842E7CC0277E9256418C46A90e3398d4005));
         console.log(unicode"PositionManager Authorized on Adapter ✅");
 
         vm.stopBroadcast();

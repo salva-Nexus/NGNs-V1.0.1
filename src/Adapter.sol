@@ -24,9 +24,7 @@ contract Adapter is AccessControl {
 
     constructor(address _ngns) {
         if (_ngns == address(0)) revert Adapter__ZeroAddress();
-
         ngns = INGNS(_ngns);
-
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MANAGER_ADMIN_ROLE, msg.sender);
     }

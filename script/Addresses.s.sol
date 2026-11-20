@@ -33,7 +33,7 @@ abstract contract Addresses {
             tokens[2] = 0x55d398326f99059fF775485246999027B3197955; // USDT
         } else if (chainId == BNB_TESTNET) {
             tokens = new address[](2);
-            tokens[0] = 0x07437dC615BC4295BA9E658a2B30915ea220bC65; // USDT
+            tokens[0] = 0x0000000000000000000000000000000000000000; // BNB
             tokens[1] = 0xb07B89CF7495306D418131123b04a9A616616228; // USDC
         } else {
             revert("Addresses: Unsupported Chain ID");
@@ -63,7 +63,7 @@ abstract contract Addresses {
             feeds[2] = address(0x501e21126486424567f40D490856094D72986E41); // USDT/USD
         } else if (chainId == BNB_TESTNET) {
             feeds = new address[](2);
-            feeds[0] = 0xEca2605f0BCF2BA5966372C99837b1F182d3D620; // USDT/USD Testnet
+            feeds[0] = 0x2514895c72f50D8bd4B4F9b1110F0D6bD2c97526; // BNB/USD Testnet
             feeds[1] = 0x90c069C4538adAc136E051052E14c1cD799C41B7; // USDC/USD Testnet
         } else {
             revert("Addresses: Unsupported Chain ID");
@@ -75,7 +75,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0x79d61b73Ec980638ea4Efef7C5637aE37f596c6f);
         if (chainId == BASE_SEPOLIA) return address(0x4e6A3bfa5c54f5b79274C73c8128d1f1c3651321);
         if (chainId == BNB_MAINNET) return address(0x80C2436b19BD1fbCc5c35375D5d5Ff1FB28Ae323);
-        if (chainId == BNB_TESTNET) return address(0x4A9D58566A5F778e090c78258f0C54189a1095Ae);
+        if (chainId == BNB_TESTNET) return address(0x3c75c735a3161cD435d19937845b125D59f8A45B);
         revert("Addresses: Unsupported Chain ID");
     }
 
@@ -84,7 +84,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0xf0Ed0652d5150606a84C7EF9726d9585478532Bc);
         if (chainId == BASE_SEPOLIA) return address(0x6b51afD271bB46C8Ff068beAa511Fee5756Fcc66);
         if (chainId == BNB_MAINNET) return address(0x97F0BCA29304E39936dbf4C58b887DEAE5D9A75B);
-        if (chainId == BNB_TESTNET) return address(0x3Ad5c68BF82bB402F81379124DCf513015CAafF1);
+        if (chainId == BNB_TESTNET) return address(0xc266F667C29034e4f6e87A04bB4E1c5065AaBb58);
         revert("Addresses: Unsupported Chain ID");
     }
 
@@ -93,7 +93,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0x308a8C74ab07e5d2eB89ba7244E089B31642a86d);
         if (chainId == BASE_SEPOLIA) return address(0x5d968c81c73ffD1D20F67E9550a6e25a022529BF);
         if (chainId == BNB_MAINNET) return address(0x05FD44F2f1bfBd1bC3DF0CAE0002ffb49EAc2057);
-        if (chainId == BNB_TESTNET) return address(0xF143e7BCf336d4bAcc15531A561b6f5476807934);
+        if (chainId == BNB_TESTNET) return address(0x9f0D71139Fd468A587f680D838d30168DE4e3e47);
         revert("Addresses: Unsupported Chain ID");
     }
 
@@ -102,7 +102,7 @@ abstract contract Addresses {
         if (chainId == BASE_MAINNET) return address(0x01ab2aB30E45e21f7Dd8c8bbDe797cc4C06FedFd);
         if (chainId == BASE_SEPOLIA) return address(0x98c8C7BFfECDE502E8f9764F8C2Dc0b87509DEc0);
         if (chainId == BNB_MAINNET) return address(0x03025C37DC3E7A7aFE2F469aDBC16605f21861b5);
-        if (chainId == BNB_TESTNET) return address(0x75C95a8421A7d07fb9f56D2F833f404A835b70c3);
+        if (chainId == BNB_TESTNET) return address(0x3A31390f448C6D4025eeeAD014b5164Df399C6a9);
         revert("Addresses: Unsupported Chain ID");
     }
 }
